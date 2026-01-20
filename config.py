@@ -46,7 +46,7 @@ FILENAME: str = str(PROJECT_ROOT / FILENAME_BASE)
 SAMPLE_RATE: int = 20_000_000
 """ADC sample rate in Hz (20 MHz)."""
 
-BUFFER_SAMPLES: int = 8192
+BUFFER_SAMPLES: int = 409_600
 """Number of samples per acquisition buffer."""
 
 NUM_CHANNELS: int = 2
@@ -93,7 +93,7 @@ FILTERED_EXTREMA_INDEX_THRESHOLD: int = 2000
 
 # --- Serial Port Configuration ---
 
-SERIAL_PORT: str = 'COM9'
+SERIAL_PORT: str = 'COM12'
 """Serial port for ESP32/Arduino communication."""
 
 BAUD_RATE: int = 115200

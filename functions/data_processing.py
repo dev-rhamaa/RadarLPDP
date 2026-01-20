@@ -815,10 +815,10 @@ def process_channel_data(
 def calculate_target_distance(
     metrics: Optional[Dict[str, Any]],
     *,
-    mag_threshold_db: float = 65.0,
-    index_min: int = 2_500,
+    mag_threshold_db: float = 75.0,
+    index_min: int = 500,
     index_max: int = 4_096,
-    channel_mode: str = "auto",
+    channel_mode: str = "ch1",
     max_range: float = RADAR_MAX_RANGE,
 ) -> Optional[float]:
     """Estimate target distance using the strongest qualifying FFT peak.
