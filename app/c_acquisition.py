@@ -99,17 +99,17 @@ class DaskDriver:
 
         project_root = Path(__file__).resolve().parent.parent
 
-        # Prioritize 64-bit DLL from Legacy C Code if on 64-bit Python
+        # Prioritize 64-bit DLL from c_src/lib if on 64-bit Python
         if sys.maxsize > 2**32:
             candidates.extend([
-                str(project_root / "Legacy C Code" / "WD-Dask LIB" / "wd-dask64.dll"),
+                str(project_root / "c_src" / "lib" / "wd-dask64.dll"),
                 str(project_root / "bin" / "wd-dask64.dll"),
                 "wd-dask64.dll",
                 "WD-Dask64.dll",
             ])
         else:
             candidates.extend([
-                str(project_root / "Legacy C Code" / "WD-Dask LIB" / "WD-Dask.dll"),
+                str(project_root / "c_src" / "lib" / "WD-Dask.dll"),
                 "WD-Dask.dll",
             ])
 
