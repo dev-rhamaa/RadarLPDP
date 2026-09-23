@@ -14,8 +14,7 @@ from config import FILENAME, TARGET_FREQ_THRESHOLD_KHZ
 def create_fft_widget(parent, width, height):
     """Membuat widget UI untuk menampilkan FFT Spectrum."""
     with dpg.group(parent=parent):
-        # Menggunakan os.path.basename untuk menampilkan nama file saja, bukan path lengkap
-        dpg.add_text(f"Monitoring '{os.path.basename(FILENAME)}'...", tag="fft_status_text")
+        dpg.add_text("Streaming DAQ Hardware PCI-9846H (In-Memory)...", tag="fft_status_text")
         
         with dpg.plot(label="Live FFT Spectrum", height=height, width=width, tag="fft_plot"):
             dpg.add_plot_legend()

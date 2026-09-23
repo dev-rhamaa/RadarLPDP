@@ -58,11 +58,11 @@ def initialize_queues_and_events() -> Tuple[Dict[str, queue.Queue], threading.Ev
         Tuple of (queues_dict, stop_event)
     """
     queues = {
-        'ppi': queue.Queue(),
-        'fft': queue.Queue(),
-        'sinewave': queue.Queue(),
-        'raw_fft': queue.Queue(maxsize=10),
-        'raw_sinewave': queue.Queue(maxsize=10)
+        'ppi': queue.Queue(maxsize=50),
+        'fft': queue.Queue(maxsize=2),
+        'sinewave': queue.Queue(maxsize=2),
+        'raw_fft': queue.Queue(maxsize=2),
+        'raw_sinewave': queue.Queue(maxsize=2)
     }
     stop_event = threading.Event()
     return queues, stop_event

@@ -12,7 +12,6 @@ from typing import Any, Dict, List, Tuple
 import dearpygui.dearpygui as dpg
 import numpy as np
 
-from app.external_process import stop_worker
 from config import (
     APP_SPACING,
     APP_PADDING,
@@ -52,14 +51,15 @@ def update_ui_from_queues(queues: Dict[str, queue.Queue]) -> None:
     except queue.Empty:
         pass
 
-    # FFT and metrics queue
+    # FFT and metrics queue - drain to latest
+    fft_data = None
     try:
-        fft_data = queues['fft'].get_nowait()
-        
-        # Skip update if FFT UI doesn't exist, but consume queue
-        if not dpg.does_item_exist("fft_status_text"):
-            return
-            
+        while True:
+            fft_data = queues['fft'].get_nowait()
+    except queue.Empty:
+        pass
+
+    if fft_data is not None and dpg.does_item_exist("fft_status_text"):
         status = fft_data.get("status")
         
         if status == "processing":
@@ -69,7 +69,7 @@ def update_ui_from_queues(queues: Dict[str, queue.Queue]) -> None:
             dpg.set_value("fft_status_text", fft_data.get("message", "Unknown status"))
             
         elif status == "done":
-            dpg.set_value("fft_status_text", f"Updated: {time.strftime('%H:%M:%S')}")
+            dpg.set_value("fft_status_text", f"Live DAQ: {time.strftime('%H:%M:%S')}")
             
             # Update FFT plots
             if dpg.does_item_exist('fft_ch1_series'):
@@ -103,16 +103,16 @@ def update_ui_from_queues(queues: Dict[str, queue.Queue]) -> None:
             # Update filtered peaks & valleys tables (index > 2000)
             _update_extrema_table('ch1_filtered', ch1.get('filtered_peaks', []), ch1.get('filtered_valleys', []))
             _update_extrema_table('ch2_filtered', ch2.get('filtered_peaks', []), ch2.get('filtered_valleys', []))
+
+    # Sinewave queue - drain to latest
+    sinewave_data = None
+    try:
+        while True:
+            sinewave_data = queues['sinewave'].get_nowait()
     except queue.Empty:
         pass
 
-    # Sinewave queue
-    try:
-        sinewave_data = queues['sinewave'].get_nowait()
-        
-        if not dpg.does_item_exist("sinewave_ch1_series"):
-            return
-            
+    if sinewave_data is not None and dpg.does_item_exist("sinewave_ch1_series"):
         if sinewave_data.get("status") == "done":
             time_axis = np.ascontiguousarray(sinewave_data["time_axis"])
             ch1_data = np.ascontiguousarray(sinewave_data["ch1_data"])
@@ -125,8 +125,6 @@ def update_ui_from_queues(queues: Dict[str, queue.Queue]) -> None:
                 dpg.set_axis_limits_auto("sinewave_xaxis")
             if dpg.does_item_exist("sinewave_yaxis"):
                 dpg.set_axis_limits_auto("sinewave_yaxis")
-    except queue.Empty:
-        pass
 
 
 def _update_channel_metrics(channel_prefix: str, metrics: Dict[str, Any]) -> None:
@@ -289,11 +287,4 @@ def cleanup_and_exit(
             t.join(timeout=1.0)
         
     print("All threads stopped. Destroying context.")
-    
-    # Ensure external process is also stopped
-    try:
-        stop_worker()
-    except Exception as e:
-        print(f"[external_worker] stop error: {e}")
-        
     dpg.destroy_context()

@@ -13,44 +13,37 @@ from typing import Dict, List, Tuple, Any
 PROJECT_ROOT: Path = Path(__file__).parent.absolute()
 """Root directory of the project."""
 
-# --- External Worker Configuration ---
+# --- Native C DAQ Hardware Configuration ---
 
-EXTERNAL_WORKER: Dict[str, Any] = {
-    "enabled": False,  # C DAQ engine is now embedded natively in Python (app/c_acquisition.py)
-    "exe_name": "cadgetdataSave.exe",
-    "args": [],
-    "cwd": None,
-    "env": {},
-    "only_on_platforms": ["win32"],
-}
-"""Configuration for external data acquisition worker.
+C_DAQ_ENABLED: bool = True
+"""Whether to initialize and run the embedded C DAQ engine via ctypes."""
 
-Attributes:
-    enabled: Whether to run the external worker
-    exe_name: Name or path of the executable
-    args: Command line arguments for the executable
-    cwd: Working directory (None = auto-detect from exe location)
-    env: Additional environment variables
-    only_on_platforms: List of platforms to run on (e.g., ['win32'])
-"""
+C_DAQ_WRITE_LIVE_BIN: bool = False
+"""Disabled: Streaming is direct in-memory without buffering to .bin file."""
+
+C_DAQ_BATCH_LOG_ENABLED: bool = False
+"""Disabled: No batch buffering to disk, data is streamed directly to UI."""
+
+C_DAQ_BATCH_MAX_EVENTS: int = 1000
+"""Number of events to accumulate before flushing batch log to disk (if enabled)."""
 
 # --- Data Acquisition Configuration ---
 
 FILENAME_BASE: str = "live/live_acquisition_ui.bin"
-"""Relative path to the live data file."""
+"""Relative path to the live data file (fallback / legacy mode)."""
 
 FILENAME: str = str(PROJECT_ROOT / FILENAME_BASE)
 """Absolute path to the live data file."""
 
-# Hardware Parameters
+# Hardware Parameters (matching cadgetdatanew.c)
 SAMPLE_RATE: int = 20_000_000
 """ADC sample rate in Hz (20 MHz)."""
 
-BUFFER_SAMPLES: int = 8192
-"""Number of samples per acquisition buffer."""
+BUFFER_SAMPLES: int = 20_000
+"""Number of samples per acquisition buffer matching cadgetdatanew.c (20,000 samples = 1 ms @ 20 MHz)."""
 
 NUM_CHANNELS: int = 2
-"""Number of ADC channels (CH1 and CH3)."""
+"""Number of ADC channels (CH0 and CH2)."""
 
 # FFT Processing Configuration
 FFT_SMOOTHING_ENABLED: bool = True

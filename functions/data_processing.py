@@ -553,16 +553,20 @@ def process_raw_channels(
     if ch1_data is None or len(ch1_data) == 0:
         return None, None
 
-    n_samples = len(ch1_data)
+    # Remove DC offset to obtain clean AC RF signals
+    ch1_ac = ch1_data - np.mean(ch1_data)
+    ch2_ac = ch2_data - np.mean(ch2_data)
+
+    n_samples = len(ch1_ac)
 
     # Compute FFT with smoothing configuration
     freqs_ch1, mag_ch1 = compute_fft(
-        ch1_data, sample_rate,
+        ch1_ac, sample_rate,
         smooth=FFT_SMOOTHING_ENABLED,
         smooth_window=FFT_SMOOTHING_WINDOW
     )
     freqs_ch2, mag_ch2 = compute_fft(
-        ch2_data, sample_rate,
+        ch2_ac, sample_rate,
         smooth=FFT_SMOOTHING_ENABLED,
         smooth_window=FFT_SMOOTHING_WINDOW
     )
@@ -571,8 +575,8 @@ def process_raw_channels(
     display_freqs_ch2, display_mag_ch2 = freqs_ch2, mag_ch2
 
     if FFT_MAGNITUDE_MODE.lower() == "linear":
-        display_freqs_ch1, display_mag_ch1 = compute_fft_linear(ch1_data, sample_rate)
-        display_freqs_ch2, display_mag_ch2 = compute_fft_linear(ch2_data, sample_rate)
+        display_freqs_ch1, display_mag_ch1 = compute_fft_linear(ch1_ac, sample_rate)
+        display_freqs_ch2, display_mag_ch2 = compute_fft_linear(ch2_ac, sample_rate)
 
     peak_freq_ch1, peak_mag_ch1 = find_peak_metrics(freqs_ch1, mag_ch1)
     peak_freq_ch2, peak_mag_ch2 = find_peak_metrics(freqs_ch2, mag_ch2)
@@ -894,10 +898,20 @@ def fft_data_worker(
 
                     fft_result, metrics = process_raw_channels(ch1_data, ch2_data, evt_sr)
                     if fft_result:
-                        fft_queue.put(fft_result)
+                        if fft_queue.full():
+                            try:
+                                fft_queue.get_nowait()
+                            except queue.Empty:
+                                pass
+                        fft_queue.put_nowait(fft_result)
                         distance = calculate_target_distance(metrics)
                         if distance:
-                            ppi_queue.put({"type": "target", "distance": distance})
+                            if ppi_queue.full():
+                                try:
+                                    ppi_queue.get_nowait()
+                                except queue.Empty:
+                                    pass
+                            ppi_queue.put_nowait({"type": "target", "distance": distance})
                     continue
                 except queue.Empty:
                     pass
@@ -950,6 +964,10 @@ def sinewave_data_worker(
                     evt_sr = event.get("sample_rate", sr)
                     n_samples = len(ch1_data)
 
+                    # Subtract DC offset so waveform centers cleanly on 0
+                    ch1_centered = ch1_data - np.mean(ch1_data)
+                    ch2_centered = ch2_data - np.mean(ch2_data)
+
                     time_axis_us = np.linspace(
                         0, n_samples / evt_sr, n_samples, endpoint=False
                     ) * 1e6
@@ -957,10 +975,16 @@ def sinewave_data_worker(
                     result_data = {
                         "status": "done",
                         "time_axis": time_axis_us,
-                        "ch1_data": ch1_data,
-                        "ch2_data": ch2_data
+                        "ch1_data": ch1_centered,
+                        "ch2_data": ch2_centered,
+                        "n_samples": n_samples
                     }
-                    result_queue.put(result_data)
+                    if result_queue.full():
+                        try:
+                            result_queue.get_nowait()
+                        except queue.Empty:
+                            pass
+                    result_queue.put_nowait(result_data)
                     continue
                 except queue.Empty:
                     pass

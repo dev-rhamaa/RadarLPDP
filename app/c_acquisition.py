@@ -22,6 +22,16 @@ from pathlib import Path
 from typing import Callable, Dict, List, Optional, Tuple, Any
 import numpy as np
 
+from config import (
+    SAMPLE_RATE as DEFAULT_SAMPLE_RATE_HZ,
+    BUFFER_SAMPLES as DEFAULT_BUFFER_SAMPLES,
+    FILENAME as DEFAULT_LIVE_FILENAME,
+    C_DAQ_ENABLED as DEFAULT_C_DAQ_ENABLED,
+    C_DAQ_WRITE_LIVE_BIN as DEFAULT_WRITE_LIVE_BIN,
+    C_DAQ_BATCH_LOG_ENABLED as DEFAULT_BATCH_LOG_ENABLED,
+    C_DAQ_BATCH_MAX_EVENTS as DEFAULT_BATCH_MAX_EVENTS,
+)
+
 # Type definitions matching ADLink Wd-dask.h
 U8 = ctypes.c_uint8
 I16 = ctypes.c_int16
@@ -38,9 +48,9 @@ CARD_NUM = 0
 
 CHANNEL_COUNT = 2               # CH0 and CH2
 SELECTED_CHANNELS = (0, 2)
-SAMPLE_RATE_HZ = 20_000_000     # 20 MS/s
-BUFFER_SAMPLES = 8192           # Samples per channel (can also be 20_000)
-MAX_EVENT_BATCH = 1000
+SAMPLE_RATE_HZ = DEFAULT_SAMPLE_RATE_HZ
+BUFFER_SAMPLES = DEFAULT_BUFFER_SAMPLES
+MAX_EVENT_BATCH = DEFAULT_BATCH_MAX_EVENTS
 
 # DAQ Operation, Mode & Trigger Constants
 WD_IntTimeBase = 0x3
@@ -188,10 +198,15 @@ class NativeCAcquisitionEngine:
 
     def __init__(
         self,
-        sample_rate_hz: int = SAMPLE_RATE_HZ,
-        buffer_samples: int = BUFFER_SAMPLES,
+        sample_rate_hz: int = DEFAULT_SAMPLE_RATE_HZ,
+        buffer_samples: int = DEFAULT_BUFFER_SAMPLES,
         channels: Tuple[int, int] = SELECTED_CHANNELS,
         log_folder: str = "log",
+        live_file: str = DEFAULT_LIVE_FILENAME,
+        enabled: bool = DEFAULT_C_DAQ_ENABLED,
+        write_live_bin: bool = DEFAULT_WRITE_LIVE_BIN,
+        batch_log_enabled: bool = DEFAULT_BATCH_LOG_ENABLED,
+        batch_max_events: int = DEFAULT_BATCH_MAX_EVENTS,
         on_event_received: Optional[Callable[[np.ndarray, np.ndarray, int], None]] = None
     ):
         self.sample_rate_hz = sample_rate_hz
@@ -201,6 +216,11 @@ class NativeCAcquisitionEngine:
         self.samples_per_buffer = self.buffer_samples * self.channel_count
         self.event_size_bytes = self.samples_per_buffer * ctypes.sizeof(U16)
         self.log_folder = log_folder
+        self.live_file = live_file
+        self.enabled = enabled
+        self.write_live_bin = write_live_bin
+        self.batch_log_enabled = batch_log_enabled
+        self.batch_max_events = batch_max_events
         self.on_event_received = on_event_received
 
         self.driver = DaskDriver()
@@ -211,7 +231,8 @@ class NativeCAcquisitionEngine:
         # Batch logging state
         self.batch_buffer: List[bytes] = []
         self.event_count: int = 0
-        os.makedirs(self.log_folder, exist_ok=True)
+        if self.batch_log_enabled:
+            os.makedirs(self.log_folder, exist_ok=True)
 
     def is_hardware_available(self) -> bool:
         """Check if driver is loaded and DAQ card registers successfully."""
@@ -240,13 +261,23 @@ class NativeCAcquisitionEngine:
     def stop(self):
         """Stop acquisition and release DAQ hardware gracefully."""
         self._stop_event.set()
-        if self._thread and self._thread.is_alive():
+        if (
+            self._thread
+            and self._thread.is_alive()
+            and threading.current_thread() != self._thread
+        ):
             self._thread.join(timeout=2.0)
             self._thread = None
 
         if self.card_id >= 0 and self.driver.is_available:
             try:
-                self.driver.WD_AI_AsyncClear(self.card_id, None, None)
+                start_pos = U32(0)
+                access_cnt = U32(0)
+                self.driver.WD_AI_AsyncClear(
+                    self.card_id,
+                    ctypes.byref(start_pos),
+                    ctypes.byref(access_cnt)
+                )
                 self.driver.WD_AI_ContBufferReset(self.card_id)
                 self.driver.WD_Release_Card(self.card_id)
                 print(f"[c_acquisition] Kartu DAQ (ID: {self.card_id}) berhasil dilepaskan.")
@@ -256,8 +287,22 @@ class NativeCAcquisitionEngine:
                 self.card_id = -1
 
         # Flush any remaining batch logs on shutdown
-        if self.batch_buffer:
+        if self.batch_log_enabled and self.batch_buffer:
             self._save_batch_to_file()
+
+    def _save_live_event(self, raw_bytes: bytes) -> None:
+        """Save latest buffer to live .bin file atomically for analytics compatibility."""
+        try:
+            live_path = Path(self.live_file)
+            live_path.parent.mkdir(parents=True, exist_ok=True)
+            tmp_path = live_path.with_suffix(".tmp")
+
+            with open(tmp_path, "wb") as f:
+                f.write(raw_bytes)
+
+            tmp_path.replace(live_path)
+        except Exception:
+            pass
 
     def _save_batch_to_file(self):
         """Save accumulated event batch with metadata header matching cadgetdatanew.c."""
@@ -298,6 +343,10 @@ class NativeCAcquisitionEngine:
 
     def _run_acquisition_loop(self):
         """Worker thread executing the continuous DMA restart acquisition."""
+        if not self.enabled:
+            print("[c_acquisition] Native C DAQ engine dinonaktifkan dalam config.")
+            return
+
         if not self.driver.is_available:
             print("[c_acquisition] Driver WD-Dask tidak terdeteksi. Standby.")
             return
@@ -369,6 +418,9 @@ class NativeCAcquisitionEngine:
             stop_flag = BOOLEAN(False)
             ready_buffer = U16(0)
 
+            last_report_time = time.time()
+            last_report_count = 0
+
             while not self._stop_event.is_set():
                 err = self.driver.WD_AI_AsyncReStartNextReady(
                     self.card_id,
@@ -394,22 +446,34 @@ class NativeCAcquisitionEngine:
                 self.event_count += 1
                 source_buf = ai_buf1 if ready_buffer.value == 0 else ai_buf2
 
-                # Fast zero-copy NumPy array creation from ctypes buffer
-                raw_bytes = bytes(source_buf)
-                interleaved = np.frombuffer(raw_bytes, dtype="<u2").astype(np.float32)
+                # Fast zero-copy NumPy array mapping from ctypes DMA buffer
+                raw_arr = np.ctypeslib.as_array(source_buf)
 
-                # De-interleave CH0 and CH2
-                ch1 = interleaved[0::2].copy()
-                ch2 = interleaved[1::2].copy()
+                # De-interleave CH0 and CH2 directly into float32 arrays
+                ch1 = raw_arr[0::2].astype(np.float32)
+                ch2 = raw_arr[1::2].astype(np.float32)
 
-                # Dispatch event to in-memory queue
+                # Dispatch event directly to in-memory queue for instant UI rendering
                 if self.on_event_received:
                     self.on_event_received(ch1, ch2, self.sample_rate_hz)
 
-                # Append to batch logger
-                if len(self.batch_buffer) < MAX_EVENT_BATCH:
+                # Live streaming throughput log (every 1 second)
+                now = time.time()
+                if now - last_report_time >= 1.0:
+                    fps = (self.event_count - last_report_count) / max(now - last_report_time, 0.001)
+                    print(f"[c_acquisition] Streaming direct memory: event #{self.event_count} ({fps:.1f} events/s)")
+                    last_report_time = now
+                    last_report_count = self.event_count
+
+                # Mirror to live file only if explicitly enabled
+                if self.write_live_bin:
+                    self._save_live_event(bytes(source_buf))
+
+                # Append to batch logger only if explicitly enabled
+                if self.batch_log_enabled:
+                    raw_bytes = bytes(source_buf)
                     self.batch_buffer.append(raw_bytes)
-                    if len(self.batch_buffer) >= MAX_EVENT_BATCH:
+                    if len(self.batch_buffer) >= self.batch_max_events:
                         self._save_batch_to_file()
 
         except Exception as e:

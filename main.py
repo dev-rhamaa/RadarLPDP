@@ -3,19 +3,12 @@
 This file is responsible for defining the UI layout and running the application.
 """
 
-# Standard library
-import atexit
-
 # Third-party
 import dearpygui.dearpygui as dpg
 
 # Local - app modules
 from app.callbacks import cleanup_and_exit, resize_callback, update_ui_from_queues
-from app.external_process import start_worker, stop_worker
 from app.setup import initialize_queues_and_events, setup_dpg, start_worker_threads
-
-# Local - config
-from config import EXTERNAL_WORKER
 
 # Local - widgets
 from widgets.FFT import create_fft_widget
@@ -50,14 +43,6 @@ def create_main_layout():
 
 # --- Titik Masuk Aplikasi --- #
 if __name__ == "__main__":
-    # 0. Jalankan background worker eksternal jika diaktifkan (legacy fallback)
-    if EXTERNAL_WORKER.get("enabled", False):
-        try:
-            start_worker(EXTERNAL_WORKER)
-            atexit.register(stop_worker)
-        except Exception as e:
-            print(f"[external_worker] gagal start: {e}")
-
     # 1. Inisialisasi Dear PyGui (viewport, tema, handler)
     setup_dpg()
 
