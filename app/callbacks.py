@@ -273,18 +273,20 @@ def cleanup_and_exit(
     stop_event: Any,
     threads: Dict[str, Any]
 ) -> None:
-    """Safely stop worker threads and close Dear PyGui.
+    """Safely stop worker threads, release DAQ hardware, and close Dear PyGui.
     
     Args:
         stop_event: Threading event to signal shutdown
-        threads: Dictionary of worker threads
+        threads: Dictionary of worker threads and engines
     """
     print("Stopping worker threads...")
     stop_event.set()
-    time.sleep(0.5)
     
-    for t in threads.values():
-        t.join()
+    for name, t in threads.items():
+        if hasattr(t, "stop"):
+            t.stop()
+        elif hasattr(t, "join"):
+            t.join(timeout=1.0)
         
     print("All threads stopped. Destroying context.")
     

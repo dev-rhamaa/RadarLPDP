@@ -16,7 +16,7 @@ PROJECT_ROOT: Path = Path(__file__).parent.absolute()
 # --- External Worker Configuration ---
 
 EXTERNAL_WORKER: Dict[str, Any] = {
-    "enabled": True,
+    "enabled": False,  # C DAQ engine is now embedded natively in Python (app/c_acquisition.py)
     "exe_name": "cadgetdataSave.exe",
     "args": [],
     "cwd": None,
