@@ -535,23 +535,25 @@ def find_filtered_extrema(
 
 # --- Signal Processing Helpers ---
 
-def process_channel_data(
-    filepath: str,
+def process_raw_channels(
+    ch1_data: NDArray[np.float32],
+    ch2_data: NDArray[np.float32],
     sample_rate: int
 ) -> Tuple[Optional[Dict[str, Any]], Optional[Dict[str, Any]]]:
-    """Load data from file, process FFT, and return results.
+    """Process in-memory channel arrays, compute FFT, and return results.
     
     Args:
-        filepath: Path to binary data file
+        ch1_data: Channel 1 signal array (CH0 or CH1)
+        ch2_data: Channel 2 signal array (CH2 or CH3)
         sample_rate: Sample rate in Hz
         
     Returns:
         Tuple of (fft_result, metrics)
-        Returns (None, None) on error
     """
-    ch1_data, ch2_data, n_samples, _ = load_and_process_data(filepath, sample_rate)
-    if ch1_data is None or n_samples <= 0:
+    if ch1_data is None or len(ch1_data) == 0:
         return None, None
+
+    n_samples = len(ch1_data)
 
     # Compute FFT with smoothing configuration
     freqs_ch1, mag_ch1 = compute_fft(
@@ -574,6 +576,18 @@ def process_channel_data(
 
     peak_freq_ch1, peak_mag_ch1 = find_peak_metrics(freqs_ch1, mag_ch1)
     peak_freq_ch2, peak_mag_ch2 = find_peak_metrics(freqs_ch2, mag_ch2)
+
+    # Extract target peaks (>10 MHz by default)
+    ch1_target_peaks, target_freq_ch1, target_mag_ch1 = find_target_extrema(
+        freqs_ch1, mag_ch1,
+        freq_threshold_khz=TARGET_FREQ_THRESHOLD_KHZ,
+        n_extrema=5
+    )
+    ch2_target_peaks, target_freq_ch2, target_mag_ch2 = find_target_extrema(
+        freqs_ch2, mag_ch2,
+        freq_threshold_khz=TARGET_FREQ_THRESHOLD_KHZ,
+        n_extrema=5
+    )
 
     # Extract top peaks and valleys with bin indices
     ch1_peaks, ch1_valleys = find_top_extrema(
@@ -617,6 +631,9 @@ def process_channel_data(
             "ch1": {
                 "peak_freq": peak_freq_ch1,
                 "peak_mag": peak_mag_ch1,
+                "target_freq": target_freq_ch1,
+                "target_mag": target_mag_ch1,
+                "target_peaks": ch1_target_peaks,
                 "peaks": ch1_peaks,
                 "valleys": ch1_valleys,
                 "filtered_peaks": ch1_filtered_peaks,
@@ -625,6 +642,9 @@ def process_channel_data(
             "ch2": {
                 "peak_freq": peak_freq_ch2,
                 "peak_mag": peak_mag_ch2,
+                "target_freq": target_freq_ch2,
+                "target_mag": target_mag_ch2,
+                "target_peaks": ch2_target_peaks,
                 "peaks": ch2_peaks,
                 "valleys": ch2_valleys,
                 "filtered_peaks": ch2_filtered_peaks,
@@ -633,6 +653,27 @@ def process_channel_data(
         }
     }
     return fft_result, fft_result["metrics"]
+
+
+def process_channel_data(
+    filepath: str,
+    sample_rate: int
+) -> Tuple[Optional[Dict[str, Any]], Optional[Dict[str, Any]]]:
+    """Load data from file, process FFT, and return results.
+    
+    Args:
+        filepath: Path to binary data file
+        sample_rate: Sample rate in Hz
+        
+    Returns:
+        Tuple of (fft_result, metrics)
+        Returns (None, None) on error
+    """
+    ch1_data, ch2_data, n_samples, _ = load_and_process_data(filepath, sample_rate)
+    if ch1_data is None or n_samples <= 0:
+        return None, None
+
+    return process_raw_channels(ch1_data, ch2_data, sample_rate)
 
 def calculate_target_distance(
     metrics: Optional[Dict[str, Any]],
@@ -826,17 +867,16 @@ def angle_worker(ppi_queue: queue.Queue, stop_event: threading.Event) -> None:
 def fft_data_worker(
     fft_queue: queue.Queue,
     ppi_queue: queue.Queue,
-    stop_event: threading.Event
+    stop_event: threading.Event,
+    raw_data_queue: Optional[queue.Queue] = None
 ) -> None:
-    """Monitor file, compute FFT & metrics, and send data to queues.
-    
-    This worker monitors the data file for changes, computes FFT analysis,
-    calculates target distance, and sends results to FFT and PPI queues.
+    """Compute FFT & metrics from in-memory queue or fallback file monitoring.
     
     Args:
         fft_queue: Queue for FFT results
         ppi_queue: Queue for PPI/target data
         stop_event: Event to signal worker shutdown
+        raw_data_queue: Optional in-memory raw acquisition queue
     """
     last_modified_time: float = 0.0
     filepath: str = FILENAME
@@ -844,6 +884,25 @@ def fft_data_worker(
 
     while not stop_event.is_set():
         try:
+            # 1. Prefer in-memory streaming from C DAQ engine
+            if raw_data_queue is not None:
+                try:
+                    event = raw_data_queue.get(timeout=0.05)
+                    ch1_data = event["ch1"]
+                    ch2_data = event["ch2"]
+                    evt_sr = event.get("sample_rate", sr)
+
+                    fft_result, metrics = process_raw_channels(ch1_data, ch2_data, evt_sr)
+                    if fft_result:
+                        fft_queue.put(fft_result)
+                        distance = calculate_target_distance(metrics)
+                        if distance:
+                            ppi_queue.put({"type": "target", "distance": distance})
+                    continue
+                except queue.Empty:
+                    pass
+
+            # 2. Fallback to file monitoring (e.g. legacy/offline mode)
             if os.path.exists(filepath):
                 modified_time = os.path.getmtime(filepath)
                 if modified_time != last_modified_time:
@@ -853,27 +912,28 @@ def fft_data_worker(
                     fft_result, metrics = process_channel_data(filepath, sr)
                     if fft_result:
                         fft_queue.put(fft_result)
-                        
                         distance = calculate_target_distance(metrics)
                         if distance:
-                            # Send target detection event WITHOUT angle info
                             ppi_queue.put({"type": "target", "distance": distance})
             
-            # Sleep briefly to avoid CPU overload
-            time.sleep(0.1)
+            time.sleep(0.05)
 
         except Exception as e:
             print(f"Error in fft_data_worker: {e}")
+            time.sleep(0.1)
+
 
 def sinewave_data_worker(
     result_queue: queue.Queue,
-    stop_event: threading.Event
+    stop_event: threading.Event,
+    raw_data_queue: Optional[queue.Queue] = None
 ) -> None:
-    """Monitor data file for sinewave plot updates.
+    """Provide waveform data for sinewave plot from in-memory queue or file.
     
     Args:
         result_queue: Queue for sinewave data
         stop_event: Event to signal worker shutdown
+        raw_data_queue: Optional in-memory raw acquisition queue
     """
     last_modified_time: float = 0.0
     filepath: str = FILENAME
@@ -881,6 +941,31 @@ def sinewave_data_worker(
 
     while not stop_event.is_set():
         try:
+            # 1. In-memory streaming from C DAQ engine
+            if raw_data_queue is not None:
+                try:
+                    event = raw_data_queue.get(timeout=0.05)
+                    ch1_data = event["ch1"]
+                    ch2_data = event["ch2"]
+                    evt_sr = event.get("sample_rate", sr)
+                    n_samples = len(ch1_data)
+
+                    time_axis_us = np.linspace(
+                        0, n_samples / evt_sr, n_samples, endpoint=False
+                    ) * 1e6
+
+                    result_data = {
+                        "status": "done",
+                        "time_axis": time_axis_us,
+                        "ch1_data": ch1_data,
+                        "ch2_data": ch2_data
+                    }
+                    result_queue.put(result_data)
+                    continue
+                except queue.Empty:
+                    pass
+
+            # 2. Fallback to file monitoring
             if os.path.exists(filepath):
                 modified_time = os.path.getmtime(filepath)
                 if modified_time != last_modified_time:
@@ -890,7 +975,6 @@ def sinewave_data_worker(
                     if ch1_data is None or n_samples == 0:
                         continue
                     
-                    # Convert time axis to microseconds (µs)
                     time_axis_us = np.linspace(
                         0, n_samples / sr, n_samples, endpoint=False
                     ) * 1e6
@@ -906,5 +990,4 @@ def sinewave_data_worker(
         except Exception as e:
             print(f"Error in sinewave_data_worker: {e}")
         
-        # Use consistent refresh interval
         time.sleep(WORKER_REFRESH_INTERVAL)

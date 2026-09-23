@@ -50,12 +50,13 @@ def create_main_layout():
 
 # --- Titik Masuk Aplikasi --- #
 if __name__ == "__main__":
-    # 0. Jalankan background worker eksternal (sebelum app utama)
-    try:
-        start_worker(EXTERNAL_WORKER)
-    except Exception as e:
-        print(f"[external_worker] gagal start: {e}")
-    atexit.register(stop_worker)
+    # 0. Jalankan background worker eksternal jika diaktifkan (legacy fallback)
+    if EXTERNAL_WORKER.get("enabled", False):
+        try:
+            start_worker(EXTERNAL_WORKER)
+            atexit.register(stop_worker)
+        except Exception as e:
+            print(f"[external_worker] gagal start: {e}")
 
     # 1. Inisialisasi Dear PyGui (viewport, tema, handler)
     setup_dpg()

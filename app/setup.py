@@ -46,6 +46,11 @@ def _preload_textures() -> None:
         except Exception as e:
             print(f"[textures] Failed to load {path}: {e}")
 
+from app.c_acquisition import NativeCAcquisitionEngine
+
+# Global native acquisition engine reference
+_active_c_daq_engine = None
+
 def initialize_queues_and_events() -> Tuple[Dict[str, queue.Queue], threading.Event]:
     """Create all queues and events needed for threading.
     
@@ -55,7 +60,9 @@ def initialize_queues_and_events() -> Tuple[Dict[str, queue.Queue], threading.Ev
     queues = {
         'ppi': queue.Queue(),
         'fft': queue.Queue(),
-        'sinewave': queue.Queue()
+        'sinewave': queue.Queue(),
+        'raw_fft': queue.Queue(maxsize=10),
+        'raw_sinewave': queue.Queue(maxsize=10)
     }
     stop_event = threading.Event()
     return queues, stop_event
@@ -63,8 +70,8 @@ def initialize_queues_and_events() -> Tuple[Dict[str, queue.Queue], threading.Ev
 def start_worker_threads(
     queues: Dict[str, queue.Queue],
     stop_event: threading.Event
-) -> Dict[str, threading.Thread]:
-    """Create and start all worker threads.
+) -> Dict[str, Any]:
+    """Create and start all worker threads including embedded C DAQ engine.
     
     Args:
         queues: Dictionary of queues for inter-thread communication
@@ -73,17 +80,40 @@ def start_worker_threads(
     Returns:
         Dictionary of worker threads
     """
+    global _active_c_daq_engine
+
+    # Callback when C DAQ card captures a continuous DMA event
+    def on_daq_event(ch1, ch2, sample_rate):
+        evt = {"ch1": ch1, "ch2": ch2, "sample_rate": sample_rate}
+        for q in [queues.get('raw_fft'), queues.get('raw_sinewave')]:
+            if q is not None:
+                try:
+                    if q.full():
+                        try:
+                            q.get_nowait()  # Drop oldest frame if full to prevent lag
+                        except queue.Empty:
+                            pass
+                    q.put_nowait(evt)
+                except Exception:
+                    pass
+
+    # Initialize embedded C DAQ engine
+    c_daq = NativeCAcquisitionEngine(on_event_received=on_daq_event)
+    _active_c_daq_engine = c_daq
+    c_daq.start()
+
     # Note: fft_data_worker also handles PPI data
     threads = {
+        'c_daq': c_daq,
         'fft': threading.Thread(
             target=fft_data_worker,
-            args=(queues['fft'], queues['ppi'], stop_event),
+            args=(queues['fft'], queues['ppi'], stop_event, queues.get('raw_fft')),
             daemon=True,
             name="FFTWorker"
         ),
         'sinewave': threading.Thread(
             target=sinewave_data_worker,
-            args=(queues['sinewave'], stop_event),
+            args=(queues['sinewave'], stop_event, queues.get('raw_sinewave')),
             daemon=True,
             name="SinewaveWorker"
         ),
@@ -95,8 +125,9 @@ def start_worker_threads(
         )
     }
 
-    for thread in threads.values():
-        thread.start()
+    for name, item in threads.items():
+        if isinstance(item, threading.Thread):
+            item.start()
         
     return threads
 
