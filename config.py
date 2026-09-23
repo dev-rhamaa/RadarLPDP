@@ -93,7 +93,9 @@ FILTERED_EXTREMA_INDEX_THRESHOLD: int = 2000
 
 # --- Serial Port Configuration ---
 
-SERIAL_PORT: str = '/dev/ttyUSB0'
+# Default port adapts to OS; can be overridden with RADAR_SERIAL_PORT environment variable
+DEFAULT_SERIAL_PORT: str = "COM3" if os.name == "nt" else "/dev/ttyUSB0"
+SERIAL_PORT: str = os.getenv("RADAR_SERIAL_PORT", DEFAULT_SERIAL_PORT)
 """Serial port for ESP32/Arduino communication."""
 
 BAUD_RATE: int = 115200

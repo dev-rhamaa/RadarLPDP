@@ -45,11 +45,25 @@ def _is_platform_allowed(only_on_platforms) -> bool:
     return sys.platform in allowed
 
 
+from app.c_acquisition import NativeCAcquisitionEngine
+
+# Global native acquisition engine
+_native_engine: Optional[NativeCAcquisitionEngine] = None
+
+
 def start_worker(cfg: Dict[str, Any]) -> Optional[int]:
-    """Start the external process in background if enabled and not already running.
-    Returns the PID if started or already running, else None.
-    """
-    global _proc
+    """Start acquisition engine (prefers embedded C DAQ engine if available, or falls back to subprocess)."""
+    global _proc, _native_engine
+    
+    # Try embedded native C DAQ engine first
+    if _native_engine is None:
+        _native_engine = NativeCAcquisitionEngine()
+    
+    if _native_engine.driver.is_available:
+        print("[external_worker] Menggunakan Embedded C DAQ Engine langsung di Python.")
+        _native_engine.start()
+        return os.getpid()
+
     if _proc and _proc.poll() is None:
         return _proc.pid
 
@@ -68,6 +82,10 @@ def start_worker(cfg: Dict[str, Any]) -> Optional[int]:
     env_cfg = dict(cfg.get("env", {})) or None
 
     exe_path = _resolve_exe_path(exe_name, cwd_cfg)
+    if not exe_path.exists():
+        print(f"[external_worker] Warning: Executable {exe_path} tidak ditemukan. Berjalan tanpa subprocess.")
+        return None
+
     cmd = [str(exe_path)] + args
 
     popen_kwargs: Dict[str, Any] = dict(
@@ -83,16 +101,23 @@ def start_worker(cfg: Dict[str, Any]) -> Optional[int]:
         DETACHED_PROCESS = 0x00000008
         popen_kwargs["creationflags"] = CREATE_NO_WINDOW | DETACHED_PROCESS
     else:
-        # New session so we can terminate the process group
         popen_kwargs["preexec_fn"] = os.setsid
 
-    _proc = subprocess.Popen(cmd, **popen_kwargs)
-    return _proc.pid
+    try:
+        _proc = subprocess.Popen(cmd, **popen_kwargs)
+        return _proc.pid
+    except Exception as e:
+        print(f"[external_worker] Gagal memulai subprocess {cmd}: {e}")
+        return None
 
 
 def stop_worker(timeout: float = 3.0) -> None:
-    """Stop the external process gracefully if running."""
-    global _proc
+    """Stop the acquisition engine gracefully."""
+    global _proc, _native_engine
+    
+    if _native_engine:
+        _native_engine.stop()
+
     if not _proc:
         return
 
@@ -104,7 +129,6 @@ def stop_worker(timeout: float = 3.0) -> None:
         if sys.platform == "win32":
             _proc.terminate()
         else:
-            # Terminate the whole process group
             os.killpg(os.getpgid(_proc.pid), signal.SIGTERM)
         _proc.wait(timeout=timeout)
     except Exception:

@@ -7,7 +7,6 @@ from the ADC, including FFT computation, peak detection, and statistical analysi
 import math
 import os
 import queue
-import struct
 import threading
 import time
 from typing import Any, Dict, List, Optional, Tuple
@@ -15,7 +14,6 @@ from typing import Any, Dict, List, Optional, Tuple
 import numpy as np
 import serial
 from numpy.typing import NDArray
-from scipy import stats as sp_stats
 from scipy.fft import rfft, rfftfreq
 from scipy.signal import find_peaks, get_window, savgol_filter
 
@@ -90,22 +88,19 @@ def load_and_process_data(
         if not data:
             return np.array([], dtype=np.float32), np.array([], dtype=np.float32), 0, sample_rate
 
-        # Ensure even byte length for uint16 unpacking
+        # Ensure even byte length for uint16
         if len(data) % 2 != 0:
             data = data[:-1]
 
-        values = np.array(
-            struct.unpack(f"<{len(data)//2}H", data),
-            dtype=np.float32
-        )
+        values = np.frombuffer(data, dtype="<u2").astype(np.float32)
 
         # Ensure even number of samples for 2-channel deinterleaving
         if len(values) % 2 != 0:
             values = values[:-1]
             
         # Deinterleave channels: CH1 (even indices), CH2 (odd indices)
-        ch1 = values[::2]
-        ch2 = values[1::2]
+        ch1 = values[::2].copy()
+        ch2 = values[1::2].copy()
         
         # Remove DC offset
         ch1 -= np.mean(ch1)
@@ -538,180 +533,7 @@ def find_filtered_extrema(
     
     return peaks, valleys
 
-# --- Statistical Analysis Functions ---
-
-def compute_basic_stats(arr: NDArray) -> Dict[str, float]:
-    """Compute basic statistics for signal data.
-    
-    Args:
-        arr: Input signal array
-        
-    Returns:
-        Dictionary containing mean, std, min, max, and rms values
-    """
-    if arr is None or len(arr) == 0:
-        return {"mean": 0.0, "std": 0.0, "min": 0.0, "max": 0.0, "rms": 0.0}
-        
-    desc = sp_stats.describe(np.asarray(arr, dtype=np.float64), ddof=0)
-    mean = float(desc.mean)
-    var = float(desc.variance) if desc.variance is not None else float(np.var(arr))
-    std = float(np.sqrt(var))
-    min_val, max_val = map(float, desc.minmax)
-    rms = float(np.sqrt(np.mean(np.square(arr))))
-    
-    return {
-        "mean": mean,
-        "std": std,
-        "min": min_val,
-        "max": max_val,
-        "rms": rms
-    }
-
-# REMOVED: compute_fft_analysis() - redundant with process_channel_data()
-# Use _compute_channel_metrics() for internal analysis needs
-
-def generate_time_axis_s(
-    n_samples: int,
-    sample_rate: float
-) -> NDArray[np.float64]:
-    """Generate time axis in seconds.
-    
-    Args:
-        n_samples: Number of samples
-        sample_rate: Sample rate in Hz
-        
-    Returns:
-        Time axis array in seconds (C-contiguous, float64)
-    """
-    if n_samples <= 0 or sample_rate <= 0:
-        return np.array([], dtype=np.float64)
-        
-    time_axis = np.linspace(
-        0,
-        n_samples / sample_rate,
-        n_samples,
-        endpoint=False
-    )
-    return np.ascontiguousarray(time_axis, dtype=np.float64)
-
-def _compute_single_channel_analysis(
-    channel: NDArray,
-    sample_rate: int
-) -> Dict[str, Any]:
-    """Internal helper: compute FFT analysis for a single channel.
-    
-    Args:
-        channel: Input signal data
-        sample_rate: Sample rate in Hz
-        
-    Returns:
-        Dictionary with frequencies, magnitudes, and peak info
-    """
-    if channel is None or len(channel) == 0:
-        return {
-            "frequencies": np.array([], dtype=np.float64),
-            "magnitudes": np.array([], dtype=np.float64),
-            "max_freq": 0.0,
-            "max_mag": 0.0,
-        }
-    
-    freqs_khz, mags_db = compute_fft(
-        channel, sample_rate,
-        smooth=FFT_SMOOTHING_ENABLED,
-        smooth_window=FFT_SMOOTHING_WINDOW
-    )
-    peak_freq, peak_mag = find_peak_metrics(freqs_khz, mags_db)
-    
-    peaks, valleys = find_top_extrema(freqs_khz, mags_db, n_extrema=5)
-    
-    return {
-        "frequencies": np.ascontiguousarray(freqs_khz, dtype=np.float64),
-        "magnitudes": np.ascontiguousarray(mags_db, dtype=np.float64),
-        "peak_frequencies": np.ascontiguousarray(
-            [p["freq_khz"] for p in peaks], dtype=np.float64
-        ),
-        "peak_magnitudes": np.ascontiguousarray(
-            [p["mag_db"] for p in peaks], dtype=np.float64
-        ),
-        "max_freq": float(peak_freq),
-        "max_mag": float(peak_mag),
-    }
-
-def analyze_loaded_data(
-    ch1: NDArray,
-    ch2: NDArray,
-    sample_rate: float,
-    n_samples: Optional[int] = None,
-    duration_s: Optional[float] = None
-) -> Dict[str, Any]:
-    """Perform complete analysis on loaded channel data.
-    
-    Args:
-        ch1: Channel 1 data
-        ch2: Channel 2 data
-        sample_rate: Sample rate in Hz
-        n_samples: Number of samples (auto-detected if None)
-        duration_s: Duration in seconds (auto-calculated if None)
-        
-    Returns:
-        Dictionary containing FFT analysis, statistics, and file info
-    """
-    # Use internal helper for FFT analysis
-    ch1_fft = _compute_single_channel_analysis(ch1, int(sample_rate))
-    ch2_fft = _compute_single_channel_analysis(ch2, int(sample_rate))
-    ch1_stats = compute_basic_stats(ch1)
-    ch2_stats = compute_basic_stats(ch2)
-    
-    if n_samples is None:
-        n_samples = len(ch1) if ch1 is not None else 0
-    if duration_s is None and sample_rate > 0:
-        duration_s = n_samples / sample_rate
-        
-    return {
-        "ch1_fft": ch1_fft,
-        "ch2_fft": ch2_fft,
-        "ch1_stats": ch1_stats,
-        "ch2_stats": ch2_stats,
-        "file_info": {
-            "duration": float(duration_s or 0.0),
-            "n_samples": int(n_samples or 0),
-            "sample_rate": float(sample_rate or 0.0),
-        },
-    }
-
-def load_file_and_prepare(
-    filepath: str,
-    sample_rate: float
-) -> Tuple[Optional[Dict[str, Any]], Optional[str]]:
-    """Load binary file and prepare data structure for UI.
-    
-    Args:
-        filepath: Path to binary data file
-        sample_rate: Sample rate in Hz
-        
-    Returns:
-        Tuple of (data_dict, error_message)
-        data_dict is None if error occurs
-    """
-    ch1_data, ch2_data, n_samples, sr = load_and_process_data(
-        filepath, int(sample_rate)
-    )
-    
-    if ch1_data is None or n_samples is None or n_samples <= 0:
-        return None, "File not found or empty"
-        
-    time_axis = generate_time_axis_s(n_samples, sr)
-    
-    data_dict = {
-        "ch1": np.ascontiguousarray(ch1_data, dtype=np.float64),
-        "ch2": np.ascontiguousarray(ch2_data, dtype=np.float64),
-        "time_axis": time_axis,
-        "n_samples": n_samples,
-        "sample_rate": sr,
-        "duration": (n_samples / sr) if sr else 0.0,
-    }
-    
-    return data_dict, None
+# --- Signal Processing Helpers ---
 
 def process_channel_data(
     filepath: str,
@@ -995,11 +817,11 @@ def angle_worker(ppi_queue: queue.Queue, stop_event: threading.Event) -> None:
                             print(f"Error reading serial data: {read_e}")
         
         except serial.SerialException:
-            print(f"Failed to connect to {SERIAL_PORT}. Check connection. Retrying in 5 seconds...")
-            time.sleep(5)
+            # Report failure once or when disconnected, then wait without spamming
+            stop_event.wait(5.0)
         except Exception as e:
             print(f"Unexpected error in angle_worker: {e}")
-            time.sleep(5)
+            stop_event.wait(5.0)
 
 def fft_data_worker(
     fft_queue: queue.Queue,
