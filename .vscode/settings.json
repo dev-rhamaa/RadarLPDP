@@ -64,5 +64,6 @@
     "stdio.h": "c",
     "stdlib.h": "c",
     "_kiss_fft_guts.h": "c"
-  }
+  },
+  "python.defaultInterpreterPath": "C:\\Users\\FIRDAUS\\AppData\\Local\\Programs\\Python\\Python314\\python.exe"
 }
