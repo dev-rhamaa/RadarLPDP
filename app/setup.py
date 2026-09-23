@@ -51,6 +51,11 @@ from app.c_acquisition import NativeCAcquisitionEngine
 # Global native acquisition engine reference
 _active_c_daq_engine = None
 
+def get_active_daq_engine():
+    """Get the active native C DAQ engine instance."""
+    global _active_c_daq_engine
+    return _active_c_daq_engine
+
 def initialize_queues_and_events() -> Tuple[Dict[str, queue.Queue], threading.Event]:
     """Create all queues and events needed for threading.
     
@@ -131,12 +136,37 @@ def start_worker_threads(
         
     return threads
 
+def _setup_fonts() -> None:
+    """Register modern anti-aliased system fonts for DearPyGui."""
+    if not dpg.does_item_exist("font_registry"):
+        with dpg.font_registry(tag="font_registry"):
+            # Check standard Windows font paths
+            font_segoe = "C:/Windows/Fonts/segoeui.ttf"
+            font_segoe_bold = "C:/Windows/Fonts/segoeuib.ttf"
+            font_consolas = "C:/Windows/Fonts/consola.ttf"
+
+            has_segoe = os.path.exists(font_segoe)
+            has_segoe_bold = os.path.exists(font_segoe_bold)
+            has_consolas = os.path.exists(font_consolas)
+
+            if has_segoe:
+                dpg.add_font(font_segoe, 15, tag="font_default")
+                dpg.bind_font("font_default")
+            
+            if has_segoe_bold:
+                dpg.add_font(font_segoe_bold, 16, tag="font_bold")
+                dpg.add_font(font_segoe_bold, 20, tag="font_title")
+
+            if has_consolas:
+                dpg.add_font(font_consolas, 14, tag="font_mono")
+
+
 def setup_dpg(
-    title: str = 'Real-time Radar UI & Spectrum Analyzer',
-    width: int = 1280,
-    height: int = 720
+    title: str = 'Radar Surveillance & Real-Time Spectrum C2 Console',
+    width: int = 1440,
+    height: int = 900
 ) -> None:
-    """Initialize Dear PyGui, viewport, theme, and handlers.
+    """Initialize Dear PyGui, viewport, modern tactical theme, and handlers.
     
     Args:
         title: Window title
@@ -149,25 +179,78 @@ def setup_dpg(
     if not dpg.does_item_exist("texture_registry"):
         dpg.add_texture_registry(tag="texture_registry")
 
+    # Load high-definition fonts
+    _setup_fonts()
+
     # Preload logo textures before creating any window/layout
     _preload_textures()
 
-    # Define global theme
-    with dpg.theme() as global_theme:
+    # Define modern military-grade tactical dark theme
+    with dpg.theme(tag="global_theme") as global_theme:
         with dpg.theme_component(dpg.mvAll):
-            dpg.add_theme_style(
-                dpg.mvStyleVar_WindowPadding,
-                APP_PADDING, APP_PADDING
-            )
-            dpg.add_theme_style(dpg.mvStyleVar_FramePadding, 4, 4)
-            dpg.add_theme_style(
-                dpg.mvStyleVar_ItemSpacing,
-                APP_SPACING, APP_SPACING
-            )
-            dpg.add_theme_color(
-                dpg.mvPlotCol_PlotBg,
-                THEME_COLORS["background"]
-            )
+            # Modern roundings
+            dpg.add_theme_style(dpg.mvStyleVar_ChildRounding, 8.0)
+            dpg.add_theme_style(dpg.mvStyleVar_FrameRounding, 6.0)
+            dpg.add_theme_style(dpg.mvStyleVar_WindowRounding, 8.0)
+            dpg.add_theme_style(dpg.mvStyleVar_PopupRounding, 6.0)
+            dpg.add_theme_style(dpg.mvStyleVar_ScrollbarRounding, 6.0)
+            dpg.add_theme_style(dpg.mvStyleVar_GrabRounding, 4.0)
+
+            # Modern breathing room
+            dpg.add_theme_style(dpg.mvStyleVar_WindowPadding, 8, 8)
+            dpg.add_theme_style(dpg.mvStyleVar_FramePadding, 8, 5)
+            dpg.add_theme_style(dpg.mvStyleVar_ItemSpacing, 8, 8)
+            dpg.add_theme_style(dpg.mvStyleVar_CellPadding, 6, 4)
+
+            # Palette: Deep Tactical Dark
+            dpg.add_theme_color(dpg.mvThemeCol_WindowBg, THEME_COLORS["background"])
+            dpg.add_theme_color(dpg.mvThemeCol_ChildBg, THEME_COLORS["card_bg"])
+            dpg.add_theme_color(dpg.mvThemeCol_PopupBg, (22, 28, 42, 255))
+            dpg.add_theme_color(dpg.mvThemeCol_Border, THEME_COLORS["card_border"])
+            dpg.add_theme_color(dpg.mvThemeCol_BorderShadow, (0, 0, 0, 0))
+
+            # Controls: Frames, Headers & Buttons
+            dpg.add_theme_color(dpg.mvThemeCol_FrameBg, (13, 18, 28, 255))
+            dpg.add_theme_color(dpg.mvThemeCol_FrameBgHovered, (24, 34, 52, 255))
+            dpg.add_theme_color(dpg.mvThemeCol_FrameBgActive, (32, 45, 68, 255))
+            
+            dpg.add_theme_color(dpg.mvThemeCol_TitleBg, (14, 20, 32, 255))
+            dpg.add_theme_color(dpg.mvThemeCol_TitleBgActive, (20, 30, 48, 255))
+            dpg.add_theme_color(dpg.mvThemeCol_MenuBarBg, (14, 20, 32, 255))
+
+            dpg.add_theme_color(dpg.mvThemeCol_Button, (25, 36, 56, 255))
+            dpg.add_theme_color(dpg.mvThemeCol_ButtonHovered, (36, 52, 80, 255))
+            dpg.add_theme_color(dpg.mvThemeCol_ButtonActive, (0, 180, 216, 255))
+
+            dpg.add_theme_color(dpg.mvThemeCol_Header, (25, 36, 56, 255))
+            dpg.add_theme_color(dpg.mvThemeCol_HeaderHovered, (36, 52, 80, 255))
+            dpg.add_theme_color(dpg.mvThemeCol_HeaderActive, (0, 210, 255, 180))
+
+            dpg.add_theme_color(dpg.mvThemeCol_CheckMark, THEME_COLORS["accent_green"])
+            dpg.add_theme_color(dpg.mvThemeCol_SliderGrab, THEME_COLORS["accent"])
+            dpg.add_theme_color(dpg.mvThemeCol_SliderGrabActive, THEME_COLORS["accent_green"])
+
+            dpg.add_theme_color(dpg.mvThemeCol_Separator, THEME_COLORS["card_border"])
+            dpg.add_theme_color(dpg.mvThemeCol_SeparatorHovered, THEME_COLORS["accent"])
+
+            # Text
+            dpg.add_theme_color(dpg.mvThemeCol_Text, THEME_COLORS["text"])
+            dpg.add_theme_color(dpg.mvThemeCol_TextDisabled, THEME_COLORS["text_muted"])
+
+            # Tables
+            dpg.add_theme_color(dpg.mvThemeCol_TableHeaderBg, (24, 33, 52, 255))
+            dpg.add_theme_color(dpg.mvThemeCol_TableBorderStrong, (45, 60, 88, 255))
+            dpg.add_theme_color(dpg.mvThemeCol_TableBorderLight, (28, 38, 56, 180))
+            dpg.add_theme_color(dpg.mvThemeCol_TableRowBg, (16, 21, 33, 255))
+            dpg.add_theme_color(dpg.mvThemeCol_TableRowBgAlt, (20, 26, 40, 255))
+
+            # Plots
+            dpg.add_theme_color(dpg.mvPlotCol_PlotBg, THEME_COLORS["plot_bg"])
+            dpg.add_theme_color(dpg.mvPlotCol_PlotBorder, THEME_COLORS["card_border"])
+            dpg.add_theme_color(dpg.mvPlotCol_LegendBg, (14, 20, 32, 220))
+            dpg.add_theme_color(dpg.mvPlotCol_LegendBorder, THEME_COLORS["card_border"])
+            dpg.add_theme_color(dpg.mvPlotCol_LegendText, THEME_COLORS["text"])
+
     dpg.bind_theme(global_theme)
 
     # Setup handler for Esc key to exit

@@ -24,13 +24,41 @@ from widgets.PPI import update_sweep_line, add_target_to_plot
 last_known_angle: float = 0.0
 target_history: deque = deque(maxlen=TARGET_HISTORY_MAX_SIZE)
 
+# Header Telemetry tracking
+_frame_count: int = 0
+_last_fps_calc: float = time.time()
+_current_fps: float = 0.0
+
+
 def update_ui_from_queues(queues: Dict[str, queue.Queue]) -> None:
     """Check all queues and update UI with new data.
     
     Args:
         queues: Dictionary of queues for different data types
     """
-    global last_known_angle, target_history
+    global last_known_angle, target_history, _frame_count, _last_fps_calc, _current_fps
+
+    # 0. Live Top Header Telemetry (1 Hz update rate)
+    _frame_count += 1
+    now = time.time()
+    if now - _last_fps_calc >= 1.0:
+        _current_fps = _frame_count / max(now - _last_fps_calc, 0.001)
+        _frame_count = 0
+        _last_fps_calc = now
+
+        if dpg.does_item_exist("header_fps_count"):
+            dpg.set_value("header_fps_count", f"{_current_fps:.1f} FPS")
+
+        if dpg.does_item_exist("header_system_time"):
+            dpg.set_value("header_system_time", time.strftime("%H:%M:%S"))
+
+        try:
+            from app.setup import get_active_daq_engine
+            engine = get_active_daq_engine()
+            if engine and hasattr(engine, "event_count") and dpg.does_item_exist("header_event_count"):
+                dpg.set_value("header_event_count", f"{engine.event_count:,} EVT")
+        except Exception:
+            pass
 
     # PPI queue - handles sweep and target messages
     try:
@@ -93,16 +121,6 @@ def update_ui_from_queues(queues: Dict[str, queue.Queue]) -> None:
             # Update target detection (>10 MHz)
             _update_target_detection("ch1", metrics.get('ch1', {}))
             _update_target_detection("ch2", metrics.get('ch2', {}))
-
-            # Update peaks & valleys tables
-            ch1 = metrics.get('ch1', {})
-            ch2 = metrics.get('ch2', {})
-            _update_extrema_table('ch1', ch1.get('peaks', []), ch1.get('valleys', []))
-            _update_extrema_table('ch2', ch2.get('peaks', []), ch2.get('valleys', []))
-            
-            # Update filtered peaks & valleys tables (index > 2000)
-            _update_extrema_table('ch1_filtered', ch1.get('filtered_peaks', []), ch1.get('filtered_valleys', []))
-            _update_extrema_table('ch2_filtered', ch2.get('filtered_peaks', []), ch2.get('filtered_valleys', []))
 
     # Sinewave queue - drain to latest
     sinewave_data = None
@@ -170,51 +188,6 @@ def _update_target_detection(channel_prefix: str, metrics: Dict[str, Any]) -> No
             dpg.set_value(mag_tag, "N/A")
 
 
-def _update_extrema_table(
-    prefix: str,
-    peaks: List[Dict[str, Any]],
-    valleys: List[Dict[str, Any]],
-    max_rows: int = 5
-) -> None:
-    """Update peaks and valleys table.
-    
-    Args:
-        prefix: Channel prefix (e.g., 'ch1', 'ch2')
-        peaks: List of peak dictionaries
-        valleys: List of valley dictionaries
-        max_rows: Maximum number of rows to display
-    """
-    combined = [("peak", p) for p in peaks] + [("valley", v) for v in valleys]
-    
-    for i in range(max_rows):
-        row_index_id = f"{prefix}_ext_{i}_index"
-        row_freq_id = f"{prefix}_ext_{i}_freq"
-        row_mag_id = f"{prefix}_ext_{i}_mag"
-        row_type_id = f"{prefix}_ext_{i}_type"
-        
-        # Check if all row elements exist
-        if not all(dpg.does_item_exist(x) for x in [
-            row_index_id, row_freq_id, row_mag_id, row_type_id
-        ]):
-            continue
-            
-        if i < len(combined):
-            extrema_type, item = combined[i]
-            dpg.set_value(row_index_id, str(item.get("index", "-")))
-            dpg.set_value(row_freq_id, f"{item.get('freq_khz', 0.0):.2f}")
-            dpg.set_value(row_mag_id, f"{item.get('mag_db', 0.0):.2f}")
-            dpg.set_value(
-                row_type_id,
-                "Peak" if extrema_type == "peak" else "Valley"
-            )
-        else:
-            # Clear empty rows
-            dpg.set_value(row_index_id, "-")
-            dpg.set_value(row_freq_id, "-")
-            dpg.set_value(row_mag_id, "-")
-            dpg.set_value(row_type_id, "-")
-
-
 def resize_callback() -> None:
     """Dynamically adjust layout when window is resized."""
     if not dpg.is_dearpygui_running():
@@ -223,49 +196,49 @@ def resize_callback() -> None:
     viewport_width = dpg.get_viewport_client_width()
     viewport_height = dpg.get_viewport_client_height()
 
-    # Calculate padding and spacing
+    # Calculate padding, spacing, and header bar height
     padding = APP_PADDING * 2
     spacing = APP_SPACING
+    header_height = 42 if dpg.does_item_exist("top_header_bar") else 0
 
     # Calculate column widths (adaptive if right_column doesn't exist)
     left_exists = dpg.does_item_exist("left_column")
     right_exists = dpg.does_item_exist("right_column")
 
     if left_exists and right_exists:
-        left_col_width = int(viewport_width * 0.7) - spacing
-        right_col_width = viewport_width - left_col_width - (spacing * 2)
+        left_col_width = int(viewport_width * 0.68) - spacing
+        right_col_width = viewport_width - left_col_width - (spacing * 2) - 8
         dpg.set_item_width("left_column", max(left_col_width, 0))
         dpg.set_item_width("right_column", max(right_col_width, 0))
     elif left_exists:
         dpg.set_item_width("left_column", max(viewport_width - padding, 0))
 
-    # Calculate left column panel heights (adaptive for PPI-only mode)
-    available_height_left = viewport_height - padding
-    
-    if dpg.does_item_exist("ppi_window") and not dpg.does_item_exist("fft_window"):
-        # PPI only: use all available height
-        dpg.set_item_height("ppi_window", max(available_height_left, 0))
-    else:
-        # PPI + FFT: split height
-        if dpg.does_item_exist("ppi_window") and dpg.does_item_exist("fft_window"):
-            ppi_height = int(available_height_left * 0.65) - spacing
-            fft_height = available_height_left - ppi_height - spacing
-            dpg.set_item_height("ppi_window", max(ppi_height, 0))
-            dpg.set_item_height("fft_window", max(fft_height, 0))
+    # Available vertical space for workspace cards
+    available_height = viewport_height - header_height - padding - spacing - 4
 
-    # Calculate right column panel heights (if exists)
+    # Calculate left column panel heights (PPI 58% / FFT 42%)
+    if dpg.does_item_exist("ppi_window") and not dpg.does_item_exist("fft_window"):
+        dpg.set_item_height("ppi_window", max(available_height, 0))
+    elif dpg.does_item_exist("ppi_window") and dpg.does_item_exist("fft_window"):
+        ppi_height = int(available_height * 0.58) - spacing
+        fft_height = available_height - ppi_height - spacing
+        dpg.set_item_height("ppi_window", max(ppi_height, 0))
+        dpg.set_item_height("fft_window", max(fft_height, 0))
+
+    # Calculate right column panel heights (3 functional widgets)
     if right_exists:
-        available_height_right = viewport_height - padding
-        panel_height = (available_height_right - (spacing * 3)) // 4
+        logo_height = 80 if dpg.does_item_exist("logo_window") else 0
+        remaining_h = available_height - logo_height - (spacing * 2)
         
-        for tag in [
-            "sinewave_window",
-            "metrics_window",
-            "file_explorer_window",
-            "logo_window"
-        ]:
-            if dpg.does_item_exist(tag):
-                dpg.set_item_height(tag, max(panel_height, 0))
+        sinewave_height = int(remaining_h * 0.52)
+        metrics_height = remaining_h - sinewave_height
+
+        if dpg.does_item_exist("sinewave_window"):
+            dpg.set_item_height("sinewave_window", max(sinewave_height, 0))
+        if dpg.does_item_exist("metrics_window"):
+            dpg.set_item_height("metrics_window", max(metrics_height, 0))
+        if dpg.does_item_exist("logo_window"):
+            dpg.set_item_height("logo_window", max(logo_height, 0))
 
 def cleanup_and_exit(
     stop_event: Any,

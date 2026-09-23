@@ -62,57 +62,7 @@ def polar_to_cartesian(
     y = center_y + radius * math.sin(angle_rad)
     return x, y
 
-# --- Data Loading Functions ---
-
-def load_and_process_data(
-    filepath: str,
-    sample_rate: int
-) -> Tuple[Optional[NDArray[np.float32]], Optional[NDArray[np.float32]], Optional[int], int]:
-    """Load binary data file, separate channels, and remove DC offset.
-    
-    Args:
-        filepath: Path to the binary data file
-        sample_rate: Sample rate in Hz
-        
-    Returns:
-        Tuple of (ch1_data, ch2_data, n_samples, sample_rate)
-        Returns (None, None, None, sample_rate) on error
-    """
-    try:
-        if not os.path.exists(filepath):
-            return None, None, None, sample_rate
-
-        with open(filepath, "rb") as f:
-            data = f.read()
-        
-        if not data:
-            return np.array([], dtype=np.float32), np.array([], dtype=np.float32), 0, sample_rate
-
-        # Ensure even byte length for uint16
-        if len(data) % 2 != 0:
-            data = data[:-1]
-
-        values = np.frombuffer(data, dtype="<u2").astype(np.float32)
-
-        # Ensure even number of samples for 2-channel deinterleaving
-        if len(values) % 2 != 0:
-            values = values[:-1]
-            
-        # Deinterleave channels: CH1 (even indices), CH2 (odd indices)
-        ch1 = values[::2].copy()
-        ch2 = values[1::2].copy()
-        
-        # Remove DC offset
-        ch1 -= np.mean(ch1)
-        ch2 -= np.mean(ch2)
-        
-        return ch1, ch2, len(ch1), sample_rate
-        
-    except Exception as e:
-        print(f"Error reading or processing file {filepath}: {e}")
-        return None, None, None, sample_rate
-
-# --- FFT and Spectral Analysis Functions ---
+# --- Signal Analysis Functions ---
 
 def smooth_spectrum(
     magnitudes: NDArray[np.float64],
@@ -659,25 +609,6 @@ def process_raw_channels(
     return fft_result, fft_result["metrics"]
 
 
-def process_channel_data(
-    filepath: str,
-    sample_rate: int
-) -> Tuple[Optional[Dict[str, Any]], Optional[Dict[str, Any]]]:
-    """Load data from file, process FFT, and return results.
-    
-    Args:
-        filepath: Path to binary data file
-        sample_rate: Sample rate in Hz
-        
-    Returns:
-        Tuple of (fft_result, metrics)
-        Returns (None, None) on error
-    """
-    ch1_data, ch2_data, n_samples, _ = load_and_process_data(filepath, sample_rate)
-    if ch1_data is None or n_samples <= 0:
-        return None, None
-
-    return process_raw_channels(ch1_data, ch2_data, sample_rate)
 
 def calculate_target_distance(
     metrics: Optional[Dict[str, Any]],
@@ -882,13 +813,11 @@ def fft_data_worker(
         stop_event: Event to signal worker shutdown
         raw_data_queue: Optional in-memory raw acquisition queue
     """
-    last_modified_time: float = 0.0
-    filepath: str = FILENAME
     sr: int = SAMPLE_RATE
 
     while not stop_event.is_set():
         try:
-            # 1. Prefer in-memory streaming from C DAQ engine
+            # Pure in-memory streaming from C DAQ engine
             if raw_data_queue is not None:
                 try:
                     event = raw_data_queue.get(timeout=0.05)
@@ -912,29 +841,14 @@ def fft_data_worker(
                                 except queue.Empty:
                                     pass
                             ppi_queue.put_nowait({"type": "target", "distance": distance})
-                    continue
                 except queue.Empty:
                     pass
-
-            # 2. Fallback to file monitoring (e.g. legacy/offline mode)
-            if os.path.exists(filepath):
-                modified_time = os.path.getmtime(filepath)
-                if modified_time != last_modified_time:
-                    last_modified_time = modified_time
-                    fft_queue.put({"status": "processing"})
-                    
-                    fft_result, metrics = process_channel_data(filepath, sr)
-                    if fft_result:
-                        fft_queue.put(fft_result)
-                        distance = calculate_target_distance(metrics)
-                        if distance:
-                            ppi_queue.put({"type": "target", "distance": distance})
-            
-            time.sleep(0.05)
+            else:
+                time.sleep(0.05)
 
         except Exception as e:
             print(f"Error in fft_data_worker: {e}")
-            time.sleep(0.1)
+            time.sleep(0.05)
 
 
 def sinewave_data_worker(
@@ -942,20 +856,18 @@ def sinewave_data_worker(
     stop_event: threading.Event,
     raw_data_queue: Optional[queue.Queue] = None
 ) -> None:
-    """Provide waveform data for sinewave plot from in-memory queue or file.
+    """Provide waveform data for sinewave plot directly from in-memory queue.
     
     Args:
         result_queue: Queue for sinewave data
         stop_event: Event to signal worker shutdown
         raw_data_queue: Optional in-memory raw acquisition queue
     """
-    last_modified_time: float = 0.0
-    filepath: str = FILENAME
     sr: int = SAMPLE_RATE
 
     while not stop_event.is_set():
         try:
-            # 1. In-memory streaming from C DAQ engine
+            # Pure in-memory streaming from C DAQ engine
             if raw_data_queue is not None:
                 try:
                     event = raw_data_queue.get(timeout=0.05)
@@ -985,33 +897,11 @@ def sinewave_data_worker(
                         except queue.Empty:
                             pass
                     result_queue.put_nowait(result_data)
-                    continue
                 except queue.Empty:
                     pass
-
-            # 2. Fallback to file monitoring
-            if os.path.exists(filepath):
-                modified_time = os.path.getmtime(filepath)
-                if modified_time != last_modified_time:
-                    last_modified_time = modified_time
-                    
-                    ch1_data, ch2_data, n_samples, _ = load_and_process_data(filepath, sr)
-                    if ch1_data is None or n_samples == 0:
-                        continue
-                    
-                    time_axis_us = np.linspace(
-                        0, n_samples / sr, n_samples, endpoint=False
-                    ) * 1e6
-                    
-                    result_data = {
-                        "status": "done",
-                        "time_axis": time_axis_us,
-                        "ch1_data": ch1_data,
-                        "ch2_data": ch2_data
-                    }
-                    result_queue.put(result_data)
+            else:
+                time.sleep(0.05)
 
         except Exception as e:
             print(f"Error in sinewave_data_worker: {e}")
-        
-        time.sleep(WORKER_REFRESH_INTERVAL)
+            time.sleep(0.05)

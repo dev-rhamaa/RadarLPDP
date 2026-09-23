@@ -418,9 +418,6 @@ class NativeCAcquisitionEngine:
             stop_flag = BOOLEAN(False)
             ready_buffer = U16(0)
 
-            last_report_time = time.time()
-            last_report_count = 0
-
             while not self._stop_event.is_set():
                 err = self.driver.WD_AI_AsyncReStartNextReady(
                     self.card_id,
@@ -456,14 +453,6 @@ class NativeCAcquisitionEngine:
                 # Dispatch event directly to in-memory queue for instant UI rendering
                 if self.on_event_received:
                     self.on_event_received(ch1, ch2, self.sample_rate_hz)
-
-                # Live streaming throughput log (every 1 second)
-                now = time.time()
-                if now - last_report_time >= 1.0:
-                    fps = (self.event_count - last_report_count) / max(now - last_report_time, 0.001)
-                    print(f"[c_acquisition] Streaming direct memory: event #{self.event_count} ({fps:.1f} events/s)")
-                    last_report_time = now
-                    last_report_count = self.event_count
 
                 # Mirror to live file only if explicitly enabled
                 if self.write_live_bin:

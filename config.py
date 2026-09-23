@@ -105,14 +105,20 @@ APP_SPACING: int = 8
 APP_PADDING: int = 8
 """Padding for UI elements in pixels."""
 
-# Color Theme
+# Color Theme - Tactical Dark Aerospace Radar Palette
 THEME_COLORS: Dict[str, Tuple[int, int, int, int]] = {
-    "background": (21, 21, 21, 255),
-    "scan_area": (37, 37, 38, 150),
-    "grid_lines": (255, 255, 255, 40),
-    "text": (255, 255, 255, 150),
-    "accent": (0, 200, 119, 255),
-    "target": (255, 0, 0, 255),
+    "background": (11, 15, 23, 255),        # Deep Slate Navy
+    "card_bg": (18, 24, 37, 255),           # Card Container Dark
+    "card_border": (36, 48, 71, 230),       # Subtle Card Border
+    "scan_area": (14, 26, 38, 160),         # PPI Scan Sector
+    "grid_lines": (36, 52, 76, 140),        # PPI & Plot Grid Reticle
+    "text": (240, 246, 255, 255),           # Crisp Primary Text
+    "text_muted": (130, 145, 170, 255),     # Muted Slate Text
+    "accent": (0, 210, 255, 255),           # Cyber Tech Cyan
+    "accent_green": (0, 255, 157, 255),     # Radar Phosphor Green (Sweep)
+    "accent_amber": (255, 184, 0, 255),     # Signal Amber / CH2
+    "target": (255, 59, 48, 255),           # Tactical Target Crimson
+    "plot_bg": (9, 13, 20, 255),            # Oscilloscope Dark Screen
 }
 """Color palette for the application theme.
 
