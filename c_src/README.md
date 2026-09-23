@@ -1,6 +1,6 @@
 # 📡 DAQ Hardware C Integration (`c_src/`)
 
-Direktori ini menyediakan pustaka driver C dan berkas header resmi untuk kartu akuisisi data **ADLink PCI-9846H**. Modul ini digunakan oleh antarmuka akuisisi Python [app/c_acquisition.py](file:///c:/RadarLPDP/app/c_acquisition.py) untuk mengalirkan data sampling multi-kanal (CH0 & CH2) langsung ke memori RAM (*Zero-Copy streaming*) tanpa memerlukan penulisan buffer ke file biner (`.bin`).
+Direktori ini menyediakan pustaka driver biner resmi untuk kartu akuisisi data **ADLink PCI-9846H**. Modul ini digunakan oleh antarmuka akuisisi Python [app/c_acquisition.py](file:///c:/RadarLPDP/app/c_acquisition.py) untuk mengalirkan data sampling multi-kanal (CH0 & CH2) langsung ke memori RAM (*Zero-Copy streaming*) tanpa memerlukan penulisan buffer ke file biner (`.bin`).
 
 ---
 
@@ -8,9 +8,6 @@ Direktori ini menyediakan pustaka driver C dan berkas header resmi untuk kartu a
 
 ```
 c_src/
-├── include/
-│   ├── Wd-dask64.h     # Berkas header resmi ADLink WD-Dask 64-bit API
-│   └── wddaskex.h      # Deklarasi properti kartu dan konfigurasi IoT DAQ
 ├── lib/
 │   └── wd-dask64.dll   # Pustaka biner driver ADLink WD-Dask 64-bit (Active Driver)
 └── README.md           # Dokumentasi modul ini
