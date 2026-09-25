@@ -17,7 +17,7 @@ def create_metrics_widget(parent: int | str, width: int, height: int) -> None:
         ):
             dpg.add_table_column(label="Channel")
             dpg.add_table_column(label="Peak Freq (kHz)")
-            dpg.add_table_column(label="Peak Power (dB)")
+            dpg.add_table_column(label="Peak Power (dBm)")
 
             with dpg.table_row():
                 dpg.add_text("CH0 (RF Beat)", color=(0, 210, 255))
@@ -50,7 +50,7 @@ def create_metrics_widget(parent: int | str, width: int, height: int) -> None:
         ):
             dpg.add_table_column(label="Channel")
             dpg.add_table_column(label="Target Freq (MHz)")
-            dpg.add_table_column(label="Target Mag (dB)")
+            dpg.add_table_column(label="Target Power (dBm)")
 
             with dpg.table_row():
                 dpg.add_text("CH0", color=(0, 210, 255))

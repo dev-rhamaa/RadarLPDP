@@ -53,14 +53,14 @@ def create_fft_widget(parent, width, height):
         dpg.add_button(label="-", small=True, callback=lambda: zoom_fft_step(2.0))
 
         dpg.add_spacer(width=2)
-        dpg.add_button(label="dB-Fit", small=True, callback=fit_fft_y)
+        dpg.add_button(label="dBm-Fit", small=True, callback=fit_fft_y)
         dpg.add_button(label="Reset", small=True, callback=reset_fft_view)
 
         dpg.add_spacer(width=4)
-        dpg.add_checkbox(label="dB-Lock", default_value=True, callback=toggle_fft_y_lock, tag="fft_lock_checkbox")
+        dpg.add_checkbox(label="dBm-Lock", default_value=True, callback=toggle_fft_y_lock, tag="fft_lock_checkbox")
 
     with dpg.plot(
-        label="Beat Frequency Spectrum (FFT)",
+        label="Beat Frequency Spectrum (dBm)",
         parent=parent,
         height=-1,
         width=-1,
@@ -76,7 +76,7 @@ def create_fft_widget(parent, width, height):
 
         y_axis = dpg.add_plot_axis(
             dpg.mvYAxis,
-            label="Magnitude (dB)",
+            label="Power Magnitude (dBm)",
             tag="fft_yaxis",
             lock_min=True,
             lock_max=True

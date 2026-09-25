@@ -61,11 +61,16 @@ FFT_SAVGOL_WINDOW: int = 51
 FFT_SAVGOL_POLYORDER: int = 3
 """Savitzky-Golay polynomial order."""
 
-FFT_MAGNITUDE_MODE: str = "db"
-"""Output magnitude scale for FFT ('linear' or 'db')."""
+FFT_MAGNITUDE_MODE: str = "dbm"
+"""Output magnitude scale for FFT ('linear' or 'dbm')."""
 
-FFT_MAGNITUDE_FLOOR_DB: float = -105.0
-"""Clamp FFT magnitude to this floor to suppress noise grass (dB)."""
+FFT_IMPEDANCE_OHMS: float = 50.0
+"""RF load impedance in Ohms for calibrated dBm power calculation (Standard 50 Ohm)."""
+
+FFT_MAGNITUDE_FLOOR_DBM: float = -120.0
+"""Clamp FFT magnitude to this floor to suppress noise grass (dBm)."""
+FFT_MAGNITUDE_FLOOR_DB: float = -120.0
+"""Backward compatibility alias for FFT_MAGNITUDE_FLOOR_DBM."""
 
 # Worker Configuration
 POLLING_INTERVAL: float = 0.5

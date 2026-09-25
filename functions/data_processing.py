@@ -34,6 +34,8 @@ from config import (
     FFT_SAVGOL_POLYORDER,
     FFT_MAGNITUDE_MODE,
     FFT_MAGNITUDE_FLOOR_DB,
+    FFT_IMPEDANCE_OHMS,
+    FFT_MAGNITUDE_FLOOR_DBM,
     TARGET_FREQ_THRESHOLD_KHZ,
     FILTERED_EXTREMA_INDEX_THRESHOLD,
 )
@@ -129,58 +131,83 @@ def compute_fft(
     sample_rate: int,
     window: str = "hann",
     smooth: bool = True,
-    smooth_window: int = 5
+    smooth_window: int = 5,
+    impedance_ohms: float = 50.0
 ) -> Tuple[NDArray[np.float64], NDArray[np.float64]]:
-    """Compute FFT spectrum and convert magnitude to dB.
+    """Compute FFT spectrum in calibrated physical RF power (dBm) into 50 ohms load.
     
     Args:
-        channel: Input signal data
+        channel: Input signal data (in Volts or raw 16-bit ADC counts)
         sample_rate: Sample rate in Hz
         window: Window function name (default: 'hann')
         smooth: Apply smoothing to reduce noise (default: True)
         smooth_window: Smoothing window size (default: 5)
+        impedance_ohms: RF load impedance in Ohms (default: 50.0)
         
     Returns:
-        Tuple of (frequencies_khz, magnitudes_db)
+        Tuple of (frequencies_khz, magnitudes_dbm)
     """
     n = len(channel)
     if n == 0:
         return np.array([], dtype=np.float64), np.array([], dtype=np.float64)
 
-    x = np.asarray(channel, dtype=np.float64)
-    
-    # Apply window function to reduce spectral leakage
+    # Convert raw 16-bit ADC counts to physical Volts if not already in Volts
+    # (PCI-9846H standard range is +/- 1.0 V full scale across 16-bit counts [-32768, 32767])
+    arr = np.asarray(channel, dtype=np.float64)
+    if np.max(np.abs(arr)) > 2.0:
+        v_signal = arr / 32768.0
+    else:
+        v_signal = arr
+
+    # Window function with coherent gain normalization
+    win_sum = float(n)
     if window:
         try:
             w = get_window(window, n, fftbins=True)
-            x = x * w
+            v_signal = v_signal * w
+            win_sum = float(np.sum(w))
         except Exception:
-            pass  # Fallback without window if invalid
+            pass
 
-    # Compute real FFT (positive frequencies only)
-    fft_result = rfft(x)
-    magnitudes = np.abs(fft_result)
+    if win_sum <= 0:
+        win_sum = float(n)
 
-    # Convert to dB scale, avoiding log(0)
-    magnitudes_db = 20.0 * np.log10(magnitudes + 1e-12)
+    # Compute single-sided real FFT (positive frequencies only)
+    fft_result = rfft(v_signal)
     
+    # Peak voltage amplitude for each frequency bin:
+    # For positive frequencies (k > 0): V_peak = 2.0 * |X[k]| / sum(w)
+    # For DC (k = 0): V_peak = |X[0]| / sum(w)
+    v_peak = (2.0 / win_sum) * np.abs(fft_result)
+    if len(v_peak) > 0:
+        v_peak[0] *= 0.5
+
+    # Power in milliwatts into impedance (default 50 ohms):
+    # P_watts = (V_rms)^2 / R = (V_peak / sqrt(2))^2 / R = V_peak^2 / (2 * R)
+    # P_mW = P_watts * 1000 = (500 / R) * V_peak^2
+    # Into 50 ohms: P_mW = 10 * V_peak^2
+    # P_dBm = 10 * log10(P_mW) = 10 + 20 * log10(V_peak)
+    imp = float(globals().get("FFT_IMPEDANCE_OHMS", impedance_ohms))
+    scale_factor = 500.0 / max(imp, 1e-6)
+    p_mw = scale_factor * (v_peak ** 2)
+    magnitudes_dbm = 10.0 * np.log10(np.maximum(p_mw, 1e-15))
+
     # Apply smoothing to reduce noise spikes
     if smooth:
-        magnitudes_db = smooth_spectrum(
-            magnitudes_db,
+        magnitudes_dbm = smooth_spectrum(
+            magnitudes_dbm,
             window_size=smooth_window,
             method=FFT_SMOOTHING_METHOD,
             savgol_window=FFT_SAVGOL_WINDOW,
             savgol_polyorder=FFT_SAVGOL_POLYORDER,
         )
 
-    if FFT_MAGNITUDE_FLOOR_DB is not None:
-        magnitudes_db = np.maximum(magnitudes_db, FFT_MAGNITUDE_FLOOR_DB)
+    floor_val = globals().get("FFT_MAGNITUDE_FLOOR_DBM", globals().get("FFT_MAGNITUDE_FLOOR_DB", -120.0))
+    if floor_val is not None:
+        magnitudes_dbm = np.maximum(magnitudes_dbm, floor_val)
 
-    # Frequencies in kHz
     frequencies_khz = rfftfreq(n, d=1.0 / sample_rate) / 1000.0
-    
-    return frequencies_khz, magnitudes_db
+    return frequencies_khz, magnitudes_dbm
 
 
 def compute_fft_linear(
@@ -218,10 +245,10 @@ def find_peak_metrics(
     
     Args:
         frequencies: Frequency array in kHz
-        magnitudes: Magnitude array in dB
+        magnitudes: Magnitude array in dBm
         
     Returns:
-        Tuple of (peak_frequency, peak_magnitude)
+        Tuple of (peak_frequency, peak_magnitude_dbm)
     """
     if len(magnitudes) == 0:
         return 0.0, 0.0
@@ -243,7 +270,7 @@ def find_top_extrema(
     
     Args:
         frequencies: Frequency array in kHz from compute_fft
-        magnitudes: Magnitude array in dB from compute_fft
+        magnitudes: Magnitude array in dBm from compute_fft
         n_extrema: Number of top peaks/valleys to extract
         prominence_db: Prominence threshold for peak detection in dB
         distance_bins: Minimum distance between peaks in FFT bins
@@ -319,7 +346,7 @@ def find_target_extrema(
     
     Args:
         frequencies: Frequency array in kHz from compute_fft
-        magnitudes: Magnitude array in dB from compute_fft
+        magnitudes: Magnitude array in dBm from compute_fft
         freq_threshold_khz: Frequency threshold in kHz (default: 10,000 kHz = 10 MHz)
         n_extrema: Number of top peaks to extract
         prominence_db: Prominence threshold for peak detection in dB
@@ -408,7 +435,7 @@ def find_filtered_extrema(
     
     Args:
         frequencies: Frequency array in kHz from compute_fft
-        magnitudes: Magnitude array in dB from compute_fft
+        magnitudes: Magnitude array in dBm from compute_fft
         index_threshold: Minimum FFT bin index to consider (default: 2000)
         n_extrema: Number of top peaks/valleys to extract
         prominence_db: Prominence threshold for peak detection in dB

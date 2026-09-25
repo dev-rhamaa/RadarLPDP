@@ -221,7 +221,7 @@ def zoom_fft_step(factor: float) -> None:
 
 
 def fit_fft_y() -> None:
-    """Auto-fit magnitude dB scale to current spectrum peak and noise floor."""
+    """Auto-fit magnitude dBm scale to current spectrum peak and noise floor."""
     if not dpg.does_item_exist("fft_ch1_series") or not dpg.does_item_exist("fft_yaxis"):
         return
     data = dpg.get_value("fft_ch1_series")
@@ -230,13 +230,13 @@ def fit_fft_y() -> None:
         y_min = float(min(y_vals))
         y_max = float(max(y_vals))
         margin = max(abs(y_max - y_min) * 0.1, 5.0)
-        request_axis_zoom("fft_yaxis", max(y_min - margin, -140.0), min(y_max + margin, 20.0), lock_after=True)
+        request_axis_zoom("fft_yaxis", max(y_min - margin, -130.0), min(y_max + margin, 15.0), lock_after=True)
     else:
         request_axis_zoom("fft_yaxis", -110.0, 10.0, lock_after=True)
 
 
 def reset_fft_view() -> None:
-    """Reset FFT to full 10 MHz span and -110 to +10 dB."""
+    """Reset FFT to full 10 MHz span and -110 to +10 dBm."""
     request_axis_zoom("fft_xaxis", 0.0, float(TARGET_FREQ_THRESHOLD_KHZ))
     request_axis_zoom("fft_yaxis", -110.0, 10.0, lock_after=True)
 
