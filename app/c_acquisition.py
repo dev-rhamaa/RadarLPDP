@@ -42,7 +42,10 @@ F32 = ctypes.c_float
 F64 = ctypes.c_double
 BOOLEAN = ctypes.c_bool
 
-# Hardware & Acquisition Constants from cadgetdatanew.c
+# Hardware & Acquisition Constants matching Code trigger V.4 (cadgetdatanew.c)
+CODE_VERSION = "Code trigger V.4"
+AUTHOR_NAME = "Raihan Muhammad"
+
 PCI_9846H = 0x17
 CARD_NUM = 0
 
@@ -316,8 +319,8 @@ class NativeCAcquisitionEngine:
 
         header_lines = [
             f"TEST_DATE:{now.strftime('%Y-%m-%d %H:%M:%S')}",
-            "CODE_VERSION:Code trigger V.4 (Python Native C-Embedded)",
-            "AUTHOR:Raihan Muhammad",
+            f"CODE_VERSION:{CODE_VERSION}",
+            f"AUTHOR:{AUTHOR_NAME}",
             "CARD:PCI-9846H",
             f"CHANNEL_COUNT:{self.channel_count}",
             f"CHANNELS:CH{self.channels[0]},CH{self.channels[1]}",
@@ -469,3 +472,80 @@ class NativeCAcquisitionEngine:
             print(f"[c_acquisition] Exception dalam acquisition loop: {e}")
         finally:
             self.stop()
+
+
+if __name__ == "__main__":
+    import argparse
+
+    parser = argparse.ArgumentParser(
+        description=f"PCI-9846H Radar Data Acquisition ({CODE_VERSION})"
+    )
+    parser.add_argument(
+        "--no-live",
+        action="store_true",
+        help="Disable atomic saving of live_acquisition_ui.bin"
+    )
+    parser.add_argument(
+        "--no-batch",
+        action="store_true",
+        help="Disable batch log accumulation to log/ folder"
+    )
+    parser.add_argument(
+        "--batch-size",
+        type=int,
+        default=MAX_EVENT_BATCH,
+        help=f"Events per batch log (default: {MAX_EVENT_BATCH})"
+    )
+    args = parser.parse_args()
+
+    event_time_ms = (BUFFER_SAMPLES / SAMPLE_RATE_HZ) * 1000.0
+
+    print("\n============================================================")
+    print("        PCI-9846H RADAR DATA ACQUISITION")
+    print("============================================================")
+    print(f"Code Version : {CODE_VERSION}")
+    print(f"Author       : {AUTHOR_NAME}")
+    print(f"Channels     : CH{SELECTED_CHANNELS[0]}, CH{SELECTED_CHANNELS[1]}")
+    print(f"Sample Rate  : {SAMPLE_RATE_HZ} Hz")
+    print(f"Samples/Ch   : {BUFFER_SAMPLES}")
+    print(f"Event Time   : {event_time_ms:.3f} ms")
+    print(f"Live File    : {DEFAULT_LIVE_FILENAME} ({'OFF' if args.no_live else 'ON'})")
+    print(f"Batch Size   : {args.batch_size} events ({'OFF' if args.no_batch else 'ON'})")
+    print("============================================================\n")
+    print("Tekan Ctrl+C kapan saja untuk menghentikan akuisisi.\n")
+
+    engine = NativeCAcquisitionEngine(
+        write_live_bin=not args.no_live,
+        batch_log_enabled=not args.no_batch,
+        batch_max_events=args.batch_size,
+    )
+
+    if not engine.driver.is_available:
+        print("[ERROR] Driver WD-Dask (wd-dask64.dll) tidak dapat dimuat!")
+        sys.exit(1)
+
+    if not engine.start():
+        print("[ERROR] Gagal memulai engine akuisisi!")
+        sys.exit(1)
+
+    last_evt = 0
+    start_time = time.time()
+    try:
+        while True:
+            time.sleep(1.0)
+            cur_evt = engine.event_count
+            delta = cur_evt - last_evt
+            last_evt = cur_evt
+            elapsed = time.time() - start_time
+            if cur_evt > 0:
+                print(
+                    f"[ACQ] Events: {cur_evt:,} | Rate: {delta:.1f} evt/s | "
+                    f"Batch: {len(engine.batch_buffer)}/{args.batch_size} | "
+                    f"Elapsed: {int(elapsed)}s"
+                )
+    except KeyboardInterrupt:
+        print("\n[c_acquisition] Sinyal berhenti diterima (Ctrl+C). Menghentikan...")
+    finally:
+        engine.stop()
+        print(f"[c_acquisition] Akuisisi selesai. Total event: {engine.event_count:,}")
+
