@@ -76,6 +76,7 @@ TIME_DIV_OPTIONS = [
     ("0.5 us/div (5 us)", 0.5),
     ("0.2 us/div (2 us)", 0.2),
     ("0.1 us/div (1 us)", 0.1),
+    ("0.05 us/div (500 ns)", 0.05),
 ]
 
 V_DIV_OPTIONS = [
@@ -147,7 +148,7 @@ def step_scope_v_div(direction: int) -> None:
 
 
 def set_scope_timebase(span_us: float) -> None:
-    """Set oscilloscope horizontal timebase span (µs), anchored from 0 µs."""
+    """Set oscilloscope horizontal timebase span (us), anchored from 0 us."""
     if not dpg.does_item_exist("sinewave_xaxis"):
         return
     request_axis_zoom("sinewave_xaxis", 0.0, float(span_us))
@@ -238,7 +239,11 @@ def fit_fft_y() -> None:
 
 
 def reset_fft_view() -> None:
+<<<<<<< HEAD
     """Reset FFT to full 10 MHz Nyquist span and -110 to +10 dBm."""
+=======
+    """Reset FFT to full 20 MHz Nyquist span and -110 to +10 dBm."""
+>>>>>>> 4c843a1f9150af01192dd01f3c23b027c2d21d6b
     request_axis_zoom("fft_xaxis", 0.0, float(NYQUIST_FREQ_KHZ))
     request_axis_zoom("fft_yaxis", -110.0, 10.0, lock_after=True)
 

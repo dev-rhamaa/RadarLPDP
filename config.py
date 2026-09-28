@@ -35,18 +35,24 @@ FILENAME_BASE: str = "live/live_acquisition_ui.bin"
 FILENAME: str = str(PROJECT_ROOT / FILENAME_BASE)
 """Absolute path to the live data file."""
 
+<<<<<<< HEAD
 # Hardware Parameters (matching cadgetdatanew.c & FMCW Specifications)
 SAMPLE_RATE: int = 20_000_000
 """ADC sample rate in Hz (20 MHz)."""
+=======
+# Hardware Parameters (matching ADLink PCI-9846H & FMCW Specifications)
+SAMPLE_RATE: int = 40_000_000
+"""ADC sample rate in Hz (40 MS/s)."""
+>>>>>>> 4c843a1f9150af01192dd01f3c23b027c2d21d6b
 
 NYQUIST_FREQ_HZ: float = SAMPLE_RATE / 2.0
-"""Nyquist limit frequency in Hz (10 MHz)."""
+"""Nyquist limit frequency in Hz (20 MHz)."""
 
 NYQUIST_FREQ_KHZ: float = NYQUIST_FREQ_HZ / 1000.0
-"""Nyquist limit frequency in kHz (10,000 kHz = 10 MHz)."""
+"""Nyquist limit frequency in kHz (20,000 kHz = 20 MHz)."""
 
-BUFFER_SAMPLES: int = 20_000
-"""Number of samples per acquisition buffer matching cadgetdatanew.c (20,000 samples = 1 ms @ 20 MHz)."""
+BUFFER_SAMPLES: int = 40_000
+"""Number of samples per acquisition buffer (40,000 samples = 1 ms @ 40 MHz)."""
 
 NUM_CHANNELS: int = 2
 """Number of ADC channels (CH0 and CH2)."""

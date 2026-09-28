@@ -347,7 +347,7 @@ def find_target_extrema(
     """Find top peaks within the FMCW radar Rx beat frequency passband [30 kHz - 5000 kHz].
     
     This function filters the spectrum to consider only frequencies within the
-    radar's operational FMCW receiver specification (30 kHz = 90 m to 5000 kHz = 15 km).
+    radar operational FMCW receiver specification (30 kHz = 90 m to 5000 kHz = 15 km).
     
     Args:
         frequencies: Frequency array in kHz from compute_fft
@@ -431,21 +431,29 @@ def find_filtered_extrema(
     frequencies: NDArray[np.float64],
     magnitudes: NDArray[np.float64],
     index_threshold: int = FILTERED_EXTREMA_INDEX_THRESHOLD,
+<<<<<<< HEAD
     index_max: int = 10_000,
+=======
+    index_max: int = 20_000,
+>>>>>>> 4c843a1f9150af01192dd01f3c23b027c2d21d6b
     n_extrema: int = 5,
     prominence_db: float = 3.0,
     distance_bins: int = 1
 ) -> Tuple[List[Dict[str, Any]], List[Dict[str, Any]]]:
+<<<<<<< HEAD
     """Find top peaks and valleys within FFT bin index range up to Nyquist limit (10 MHz).
+=======
+    """Find top peaks and valleys within FFT bin index range up to Nyquist limit (20 MHz).
+>>>>>>> 4c843a1f9150af01192dd01f3c23b027c2d21d6b
     
     This function analyzes spectrum features between index_threshold (default: 30 bins = 30 kHz)
-    and index_max (default: 10,000 bins = 10 MHz Nyquist limit).
+    and index_max (default: 20,000 bins = 20 MHz Nyquist limit @ 40 MS/s).
     
     Args:
         frequencies: Frequency array in kHz from compute_fft
         magnitudes: Magnitude array in dBm from compute_fft
         index_threshold: Minimum FFT bin index to consider (default: 30 bins = 30 kHz)
-        index_max: Maximum FFT bin index to consider (default: 10,000 bins = 10 MHz Nyquist)
+        index_max: Maximum FFT bin index to consider (default: 20,000 bins = 20 MHz Nyquist)
         n_extrema: Number of top peaks/valleys to extract
         prominence_db: Prominence threshold for peak detection in dB
         distance_bins: Minimum distance between peaks in FFT bins
@@ -581,7 +589,11 @@ def process_raw_channels(
         n_extrema=5
     )
 
+<<<<<<< HEAD
     # Extract top peaks and valleys with bin indices across full spectrum (up to Nyquist 10 MHz)
+=======
+    # Extract top peaks and valleys with bin indices across full spectrum (up to Nyquist 20 MHz)
+>>>>>>> 4c843a1f9150af01192dd01f3c23b027c2d21d6b
     ch1_peaks, ch1_valleys = find_top_extrema(
         freqs_ch1, mag_ch1,
         n_extrema=5,
@@ -595,11 +607,15 @@ def process_raw_channels(
         distance_bins=1
     )
     
+<<<<<<< HEAD
     # Extract filtered peaks and valleys (index 30 up to Nyquist index 10,000)
+=======
+    # Extract filtered peaks and valleys (index 30 up to Nyquist index 20,000 @ 40 MS/s)
+>>>>>>> 4c843a1f9150af01192dd01f3c23b027c2d21d6b
     ch1_filtered_peaks, ch1_filtered_valleys = find_filtered_extrema(
         freqs_ch1, mag_ch1,
         index_threshold=FILTERED_EXTREMA_INDEX_THRESHOLD,
-        index_max=10_000,
+        index_max=20_000,
         n_extrema=5,
         prominence_db=3.0,
         distance_bins=1
@@ -607,7 +623,7 @@ def process_raw_channels(
     ch2_filtered_peaks, ch2_filtered_valleys = find_filtered_extrema(
         freqs_ch2, mag_ch2,
         index_threshold=FILTERED_EXTREMA_INDEX_THRESHOLD,
-        index_max=10_000,
+        index_max=20_000,
         n_extrema=5,
         prominence_db=3.0,
         distance_bins=1
@@ -714,7 +730,6 @@ def calculate_target_distance(
         return None
 
     _, best_freq = best_candidate
-    # FMCW Radar equation: R (km) = (f_b * 3.0 m) / 1000
     distance_km = (best_freq * 3.0) / 1000.0
 
     if distance_km <= 0:
@@ -751,7 +766,7 @@ def angle_worker(ppi_queue: queue.Queue, stop_event: threading.Event) -> None:
     """Read angle data from serial port and send calibrated angles to PPI queue.
     
     This worker reads raw angle data from the serial port, performs direction
-    synchronization, and sends calibrated 0-180° angles to the PPI queue.
+    synchronization, and sends calibrated 0-180 deg angles to the PPI queue.
     
     Args:
         ppi_queue: Queue for sending angle updates
