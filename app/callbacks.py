@@ -18,6 +18,7 @@ from config import (
     THEME_COLORS,
     TARGET_HISTORY_MAX_SIZE,
     TARGET_FREQ_THRESHOLD_KHZ,
+    NYQUIST_FREQ_KHZ,
 )
 from widgets.PPI import update_sweep_line, add_target_to_plot
 
@@ -74,6 +75,7 @@ TIME_DIV_OPTIONS = [
     ("1 us/div (10 us)", 1.0),
     ("0.5 us/div (5 us)", 0.5),
     ("0.2 us/div (2 us)", 0.2),
+    ("0.1 us/div (1 us)", 0.1),
 ]
 
 V_DIV_OPTIONS = [
@@ -211,12 +213,12 @@ def zoom_fft_step(factor: float) -> None:
         return
     limits = dpg.get_axis_limits("fft_xaxis")
     cur_span = max(limits[1] - limits[0], 10.0)
-    new_span = min(max(cur_span * factor, 10.0), float(TARGET_FREQ_THRESHOLD_KHZ))
+    new_span = min(max(cur_span * factor, 10.0), float(NYQUIST_FREQ_KHZ))
     center = (limits[0] + limits[1]) / 2.0
     new_min = max(0.0, center - new_span / 2.0)
-    new_max = min(float(TARGET_FREQ_THRESHOLD_KHZ), new_min + new_span)
-    if new_max - new_min < new_span and new_max >= float(TARGET_FREQ_THRESHOLD_KHZ):
-        new_min = max(0.0, float(TARGET_FREQ_THRESHOLD_KHZ) - new_span)
+    new_max = min(float(NYQUIST_FREQ_KHZ), new_min + new_span)
+    if new_max - new_min < new_span and new_max >= float(NYQUIST_FREQ_KHZ):
+        new_min = max(0.0, float(NYQUIST_FREQ_KHZ) - new_span)
     request_axis_zoom("fft_xaxis", new_min, new_max)
 
 
@@ -236,8 +238,8 @@ def fit_fft_y() -> None:
 
 
 def reset_fft_view() -> None:
-    """Reset FFT to full 10 MHz span and -110 to +10 dBm."""
-    request_axis_zoom("fft_xaxis", 0.0, float(TARGET_FREQ_THRESHOLD_KHZ))
+    """Reset FFT to full 10 MHz Nyquist span and -110 to +10 dBm."""
+    request_axis_zoom("fft_xaxis", 0.0, float(NYQUIST_FREQ_KHZ))
     request_axis_zoom("fft_yaxis", -110.0, 10.0, lock_after=True)
 
 
@@ -335,9 +337,9 @@ def update_ui_from_queues(queues: Dict[str, queue.Queue]) -> None:
                     [fft_data["freqs_ch2"], fft_data["mag_ch2"]]
                 )
 
-            # One-time initial fit on startup
+            # One-time initial fit on startup (Full Nyquist 10 MHz)
             if not _fft_initial_fitted and dpg.does_item_exist("fft_xaxis") and dpg.does_item_exist("fft_yaxis"):
-                request_axis_zoom("fft_xaxis", 0.0, float(TARGET_FREQ_THRESHOLD_KHZ))
+                request_axis_zoom("fft_xaxis", 0.0, float(NYQUIST_FREQ_KHZ))
                 request_axis_zoom("fft_yaxis", -110.0, 10.0, lock_after=True)
                 _fft_initial_fitted = True
 
@@ -394,27 +396,35 @@ def _update_channel_metrics(channel_prefix: str, metrics: Dict[str, Any]) -> Non
 
 
 def _update_target_detection(channel_prefix: str, metrics: Dict[str, Any]) -> None:
-    """Update target detection display (>10 MHz).
+    """Update target detection display (30 kHz - 5 MHz FMCW beat, max 15 km).
     
     Args:
         channel_prefix: Channel identifier (e.g., 'ch1', 'ch2')
-        metrics: Dictionary containing target frequency and magnitude
+        metrics: Dictionary containing target frequency, range, and magnitude
     """
     freq_tag = f"{channel_prefix}_target_freq"
+    range_tag = f"{channel_prefix}_target_range"
     mag_tag = f"{channel_prefix}_target_mag"
     
     target_freq = metrics.get('target_freq', 0.0)
     target_mag = metrics.get('target_mag', 0.0)
     
     if dpg.does_item_exist(freq_tag):
-        if target_freq > 0:
-            # Convert kHz to MHz for display
-            dpg.set_value(freq_tag, f"{target_freq / 1000.0:.3f}")
+        if target_freq >= 30.0:
+            dpg.set_value(freq_tag, f"{target_freq:.1f}")
         else:
             dpg.set_value(freq_tag, "N/A")
+
+    if dpg.does_item_exist(range_tag):
+        if target_freq >= 30.0:
+            # FMCW Range formula: R (km) = (f_beat (kHz) * 3.0 m) / 1000
+            dist_km = (target_freq * 3.0) / 1000.0
+            dpg.set_value(range_tag, f"{dist_km:.2f}")
+        else:
+            dpg.set_value(range_tag, "N/A")
             
     if dpg.does_item_exist(mag_tag):
-        if target_freq > 0:
+        if target_freq >= 30.0:
             dpg.set_value(mag_tag, f"{target_mag:.2f}")
         else:
             dpg.set_value(mag_tag, "N/A")

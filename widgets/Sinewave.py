@@ -89,12 +89,12 @@ def create_sinewave_widget(parent, width, height):
         
         x_axis = dpg.add_plot_axis(
             dpg.mvXAxis,
-            label="Time (us)",
+            label="Time (us) [1 Chirp = 1000 us | Ts = 50 ns]",
             tag="sinewave_xaxis"
         )
         y_axis = dpg.add_plot_axis(
             dpg.mvYAxis,
-            label="ADC Amplitude",
+            label="Amplitude (ADC Counts / +/-1.0V FS)",
             tag="sinewave_yaxis",
             lock_min=True,
             lock_max=True

@@ -39,8 +39,8 @@ def create_metrics_widget(parent: int | str, width: int, height: int) -> None:
 
         dpg.add_spacer(height=6)
 
-        # 2. Target Acquisition (>10 MHz / FMCW Beat Detection)
-        dpg.add_text("Target Acquisition (>10 MHz Beat):", color=(255, 184, 0))
+        # 2. Target Detection (30 kHz - 5 MHz • Max 15 km • FMCW)
+        dpg.add_text("Target Detection (30 kHz - 5 MHz • Max 15 km):", color=(255, 184, 0))
         with dpg.table(
             header_row=True,
             borders_innerH=True,
@@ -49,12 +49,16 @@ def create_metrics_widget(parent: int | str, width: int, height: int) -> None:
             borders_outerV=True
         ):
             dpg.add_table_column(label="Channel")
-            dpg.add_table_column(label="Target Freq (MHz)")
-            dpg.add_table_column(label="Target Power (dBm)")
+            dpg.add_table_column(label="Beat Freq (kHz)")
+            dpg.add_table_column(label="Est. Range (km)")
+            dpg.add_table_column(label="Power (dBm)")
 
             with dpg.table_row():
                 dpg.add_text("CH0", color=(0, 210, 255))
                 dpg.add_text("N/A", tag="ch1_target_freq")
+                if dpg.does_item_exist("font_mono"):
+                    dpg.bind_item_font(dpg.last_item(), "font_mono")
+                dpg.add_text("N/A", tag="ch1_target_range")
                 if dpg.does_item_exist("font_mono"):
                     dpg.bind_item_font(dpg.last_item(), "font_mono")
                 dpg.add_text("N/A", tag="ch1_target_mag")
@@ -64,6 +68,9 @@ def create_metrics_widget(parent: int | str, width: int, height: int) -> None:
             with dpg.table_row():
                 dpg.add_text("CH2", color=(255, 184, 0))
                 dpg.add_text("N/A", tag="ch2_target_freq")
+                if dpg.does_item_exist("font_mono"):
+                    dpg.bind_item_font(dpg.last_item(), "font_mono")
+                dpg.add_text("N/A", tag="ch2_target_range")
                 if dpg.does_item_exist("font_mono"):
                     dpg.bind_item_font(dpg.last_item(), "font_mono")
                 dpg.add_text("N/A", tag="ch2_target_mag")

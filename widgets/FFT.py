@@ -44,6 +44,7 @@ def create_fft_widget(parent, width, height):
         dpg.add_spacer(width=4)
         dpg.add_text("Span:", color=(130, 145, 170))
         dpg.add_button(label="10 MHz", small=True, callback=lambda: set_fft_span(10000.0))
+        dpg.add_button(label="5 MHz", small=True, callback=lambda: set_fft_span(5000.0))
         dpg.add_button(label="2 MHz", small=True, callback=lambda: set_fft_span(2000.0))
         dpg.add_button(label="500 kHz", small=True, callback=lambda: set_fft_span(500.0))
         dpg.add_button(label="100 kHz", small=True, callback=lambda: set_fft_span(100.0))
@@ -70,7 +71,7 @@ def create_fft_widget(parent, width, height):
         
         x_axis = dpg.add_plot_axis(
             dpg.mvXAxis,
-            label="Beat Frequency (kHz)",
+            label="Beat Frequency (kHz) [Nyquist: 10 MHz • Radar Rx: 5 MHz / 15 km]",
             tag="fft_xaxis"
         )
 

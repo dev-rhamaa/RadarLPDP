@@ -35,15 +35,49 @@ FILENAME_BASE: str = "live/live_acquisition_ui.bin"
 FILENAME: str = str(PROJECT_ROOT / FILENAME_BASE)
 """Absolute path to the live data file."""
 
-# Hardware Parameters (matching cadgetdatanew.c)
+# Hardware Parameters (matching cadgetdatanew.c & FMCW Specifications)
 SAMPLE_RATE: int = 20_000_000
 """ADC sample rate in Hz (20 MHz)."""
+
+NYQUIST_FREQ_HZ: float = SAMPLE_RATE / 2.0
+"""Nyquist limit frequency in Hz (10 MHz)."""
+
+NYQUIST_FREQ_KHZ: float = NYQUIST_FREQ_HZ / 1000.0
+"""Nyquist limit frequency in kHz (10,000 kHz = 10 MHz)."""
 
 BUFFER_SAMPLES: int = 20_000
 """Number of samples per acquisition buffer matching cadgetdatanew.c (20,000 samples = 1 ms @ 20 MHz)."""
 
 NUM_CHANNELS: int = 2
 """Number of ADC channels (CH0 and CH2)."""
+
+# --- FMCW Radar Technical Specifications (Ground Surveillance Portable FMCW) ---
+FMCW_CARRIER_FREQ_HZ: float = 5.6e9
+"""C-Band carrier center frequency (5600 MHz)."""
+
+FMCW_BANDWIDTH_HZ: float = 50_000_000.0
+"""FMCW sweep bandwidth (50 MHz, from 5600 +/- 25 MHz)."""
+
+FMCW_CHIRP_TIME_S: float = 0.001
+"""Chirp sweep time (1 ms = 1000 Hz sweep repetition rate)."""
+
+FMCW_TX_POWER_W: float = 5.0
+"""SSPA output power in Watts (5 W = 37 dBm max)."""
+
+FMCW_TX_POWER_DBM: float = 37.0
+"""Transmit power in dBm."""
+
+FMCW_RX_LNA_SENSITIVITY_DBM: float = -40.0
+"""Rx LNA sensitivity threshold in dBm (-40 dBm)."""
+
+FMCW_BEAT_MIN_KHZ: float = 30.0
+"""Minimum Rx beat frequency output in kHz (30 kHz = 90 meters range)."""
+
+FMCW_BEAT_MAX_KHZ: float = 5000.0
+"""Maximum Rx beat frequency output in kHz (5000 kHz = 5 MHz = 15 km range)."""
+
+FMCW_RANGE_FACTOR_M_PER_KHZ: float = 3.0
+"""FMCW distance factor: 3.0 meters per kHz of beat frequency (delta_R = c*T / (2*B))."""
 
 # FFT Processing Configuration
 FFT_SMOOTHING_ENABLED: bool = True
@@ -83,11 +117,17 @@ WORKER_REFRESH_INTERVAL: float = 0.05
 TARGET_HISTORY_MAX_SIZE: int = 50
 """Maximum number of targets to keep in history."""
 
-TARGET_FREQ_THRESHOLD_KHZ: float = 10_000.0
-"""Frequency threshold for target detection in kHz (10 MHz)."""
+TARGET_FREQ_THRESHOLD_KHZ: float = 30.0
+"""Minimum frequency threshold for target detection in kHz (30 kHz = 90 m)."""
 
-FILTERED_EXTREMA_INDEX_THRESHOLD: int = 2000
-"""FFT bin index threshold for filtered extrema analysis."""
+TARGET_FREQ_MAX_KHZ: float = 5000.0
+"""Maximum frequency threshold for target detection in kHz (5000 kHz = 5 MHz = 15 km)."""
+
+TARGET_MAG_THRESHOLD_DBM: float = -80.0
+"""Magnitude threshold for target detection in dBm."""
+
+FILTERED_EXTREMA_INDEX_THRESHOLD: int = 30
+"""FFT bin index threshold for filtered extrema analysis (30 bins = 30 kHz)."""
 
 # --- Serial Port Configuration ---
 
@@ -133,7 +173,10 @@ Colors are in RGBA format (Red, Green, Blue, Alpha).
 # --- Radar Configuration ---
 
 RADAR_MAX_RANGE: float = 15.0
-"""Maximum radar range in meters."""
+"""Maximum radar range in kilometers (15 km)."""
+
+RADAR_MIN_RANGE: float = 0.09
+"""Minimum radar range in kilometers (90 meters = 30 kHz beat frequency)."""
 
 RADAR_SWEEP_ANGLE_MIN: float = 0.0
 """Minimum sweep angle in degrees."""
