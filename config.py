@@ -35,15 +35,9 @@ FILENAME_BASE: str = "live/live_acquisition_ui.bin"
 FILENAME: str = str(PROJECT_ROOT / FILENAME_BASE)
 """Absolute path to the live data file."""
 
-<<<<<<< HEAD
-# Hardware Parameters (matching cadgetdatanew.c & FMCW Specifications)
-SAMPLE_RATE: int = 20_000_000
-"""ADC sample rate in Hz (20 MHz)."""
-=======
 # Hardware Parameters (matching ADLink PCI-9846H & FMCW Specifications)
 SAMPLE_RATE: int = 40_000_000
 """ADC sample rate in Hz (40 MS/s)."""
->>>>>>> 4c843a1f9150af01192dd01f3c23b027c2d21d6b
 
 NYQUIST_FREQ_HZ: float = SAMPLE_RATE / 2.0
 """Nyquist limit frequency in Hz (20 MHz)."""
@@ -123,9 +117,13 @@ WORKER_REFRESH_INTERVAL: float = 0.05
 TARGET_HISTORY_MAX_SIZE: int = 50
 """Maximum number of targets to keep in history."""
 
+TARGET_FREQ_THRESHOLD_KHZ: float = 10_000.0
+"""Frequency threshold for target detection in kHz (10 MHz)."""
 TARGET_FREQ_THRESHOLD_KHZ: float = 30.0
 """Minimum frequency threshold for target detection in kHz (30 kHz = 90 m)."""
 
+FILTERED_EXTREMA_INDEX_THRESHOLD: int = 2000
+"""FFT bin index threshold for filtered extrema analysis."""
 TARGET_FREQ_MAX_KHZ: float = 5000.0
 """Maximum frequency threshold for target detection in kHz (5000 kHz = 5 MHz = 15 km)."""
 
@@ -179,6 +177,7 @@ Colors are in RGBA format (Red, Green, Blue, Alpha).
 # --- Radar Configuration ---
 
 RADAR_MAX_RANGE: float = 15.0
+"""Maximum radar range in meters."""
 """Maximum radar range in kilometers (15 km)."""
 
 RADAR_MIN_RANGE: float = 0.09

@@ -431,20 +431,12 @@ def find_filtered_extrema(
     frequencies: NDArray[np.float64],
     magnitudes: NDArray[np.float64],
     index_threshold: int = FILTERED_EXTREMA_INDEX_THRESHOLD,
-<<<<<<< HEAD
-    index_max: int = 10_000,
-=======
     index_max: int = 20_000,
->>>>>>> 4c843a1f9150af01192dd01f3c23b027c2d21d6b
     n_extrema: int = 5,
     prominence_db: float = 3.0,
     distance_bins: int = 1
 ) -> Tuple[List[Dict[str, Any]], List[Dict[str, Any]]]:
-<<<<<<< HEAD
-    """Find top peaks and valleys within FFT bin index range up to Nyquist limit (10 MHz).
-=======
     """Find top peaks and valleys within FFT bin index range up to Nyquist limit (20 MHz).
->>>>>>> 4c843a1f9150af01192dd01f3c23b027c2d21d6b
     
     This function analyzes spectrum features between index_threshold (default: 30 bins = 30 kHz)
     and index_max (default: 20,000 bins = 20 MHz Nyquist limit @ 40 MS/s).
@@ -589,11 +581,7 @@ def process_raw_channels(
         n_extrema=5
     )
 
-<<<<<<< HEAD
-    # Extract top peaks and valleys with bin indices across full spectrum (up to Nyquist 10 MHz)
-=======
     # Extract top peaks and valleys with bin indices across full spectrum (up to Nyquist 20 MHz)
->>>>>>> 4c843a1f9150af01192dd01f3c23b027c2d21d6b
     ch1_peaks, ch1_valleys = find_top_extrema(
         freqs_ch1, mag_ch1,
         n_extrema=5,
@@ -607,11 +595,7 @@ def process_raw_channels(
         distance_bins=1
     )
     
-<<<<<<< HEAD
-    # Extract filtered peaks and valleys (index 30 up to Nyquist index 10,000)
-=======
     # Extract filtered peaks and valleys (index 30 up to Nyquist index 20,000 @ 40 MS/s)
->>>>>>> 4c843a1f9150af01192dd01f3c23b027c2d21d6b
     ch1_filtered_peaks, ch1_filtered_valleys = find_filtered_extrema(
         freqs_ch1, mag_ch1,
         index_threshold=FILTERED_EXTREMA_INDEX_THRESHOLD,

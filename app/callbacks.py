@@ -214,9 +214,13 @@ def zoom_fft_step(factor: float) -> None:
         return
     limits = dpg.get_axis_limits("fft_xaxis")
     cur_span = max(limits[1] - limits[0], 10.0)
+    new_span = min(max(cur_span * factor, 10.0), float(TARGET_FREQ_THRESHOLD_KHZ))
     new_span = min(max(cur_span * factor, 10.0), float(NYQUIST_FREQ_KHZ))
     center = (limits[0] + limits[1]) / 2.0
     new_min = max(0.0, center - new_span / 2.0)
+    new_max = min(float(TARGET_FREQ_THRESHOLD_KHZ), new_min + new_span)
+    if new_max - new_min < new_span and new_max >= float(TARGET_FREQ_THRESHOLD_KHZ):
+        new_min = max(0.0, float(TARGET_FREQ_THRESHOLD_KHZ) - new_span)
     new_max = min(float(NYQUIST_FREQ_KHZ), new_min + new_span)
     if new_max - new_min < new_span and new_max >= float(NYQUIST_FREQ_KHZ):
         new_min = max(0.0, float(NYQUIST_FREQ_KHZ) - new_span)
@@ -239,11 +243,7 @@ def fit_fft_y() -> None:
 
 
 def reset_fft_view() -> None:
-<<<<<<< HEAD
-    """Reset FFT to full 10 MHz Nyquist span and -110 to +10 dBm."""
-=======
     """Reset FFT to full 20 MHz Nyquist span and -110 to +10 dBm."""
->>>>>>> 4c843a1f9150af01192dd01f3c23b027c2d21d6b
     request_axis_zoom("fft_xaxis", 0.0, float(NYQUIST_FREQ_KHZ))
     request_axis_zoom("fft_yaxis", -110.0, 10.0, lock_after=True)
 
@@ -342,8 +342,10 @@ def update_ui_from_queues(queues: Dict[str, queue.Queue]) -> None:
                     [fft_data["freqs_ch2"], fft_data["mag_ch2"]]
                 )
 
+            # One-time initial fit on startup
             # One-time initial fit on startup (Full Nyquist 10 MHz)
             if not _fft_initial_fitted and dpg.does_item_exist("fft_xaxis") and dpg.does_item_exist("fft_yaxis"):
+                request_axis_zoom("fft_xaxis", 0.0, float(TARGET_FREQ_THRESHOLD_KHZ))
                 request_axis_zoom("fft_xaxis", 0.0, float(NYQUIST_FREQ_KHZ))
                 request_axis_zoom("fft_yaxis", -110.0, 10.0, lock_after=True)
                 _fft_initial_fitted = True
