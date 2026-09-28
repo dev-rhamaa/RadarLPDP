@@ -230,12 +230,19 @@ class NativeCAcquisitionEngine:
         self.card_id: int = -1
         self._stop_event = threading.Event()
         self._thread: Optional[threading.Thread] = None
+        self.status: str = "INITIALIZED"
+        self.last_error: Optional[str] = None
 
         # Batch logging state
         self.batch_buffer: List[bytes] = []
         self.event_count: int = 0
         if self.batch_log_enabled:
             os.makedirs(self.log_folder, exist_ok=True)
+
+    @property
+    def is_running(self) -> bool:
+        """Whether the acquisition worker is actively acquiring data."""
+        return self._thread is not None and self._thread.is_alive() and self.status == "ACQUIRING"
 
     def is_hardware_available(self) -> bool:
         """Check if driver is loaded and DAQ card registers successfully."""
@@ -247,8 +254,30 @@ class NativeCAcquisitionEngine:
             return True
         return False
 
-    def start(self) -> bool:
-        """Start the background acquisition thread."""
+    def check_hardware_or_raise(self) -> None:
+        """Explicitly verify physical DAQ hardware presence, raising RuntimeError if missing."""
+        if not self.driver.is_available:
+            self.status = "DRIVER_NOT_FOUND"
+            self.last_error = "Driver WD-Dask biner (wd-dask64.dll) tidak terdeteksi."
+            raise RuntimeError(self.last_error)
+
+        if not self.is_hardware_available():
+            self.status = "HARDWARE_NOT_FOUND"
+            self.last_error = (
+                "Perangkat keras ADC ADLink PCI-9846H tidak terdeteksi pada sistem ini "
+                "(WD_Register_Card gagal). Pastikan kartu terpasang pada slot PCIe."
+            )
+            raise RuntimeError(self.last_error)
+
+    def start(self, raise_if_no_hardware: bool = False) -> bool:
+        """Start the background acquisition thread.
+        
+        Args:
+            raise_if_no_hardware: If True, raises RuntimeError immediately if hardware is missing.
+        """
+        if raise_if_no_hardware:
+            self.check_hardware_or_raise()
+
         if self._thread and self._thread.is_alive():
             return True
 
@@ -347,18 +376,25 @@ class NativeCAcquisitionEngine:
     def _run_acquisition_loop(self):
         """Worker thread executing the continuous DMA restart acquisition."""
         if not self.enabled:
+            self.status = "DISABLED"
             print("[c_acquisition] Native C DAQ engine dinonaktifkan dalam config.")
             return
 
         if not self.driver.is_available:
-            print("[c_acquisition] Driver WD-Dask tidak terdeteksi. Standby.")
+            self.status = "DRIVER_NOT_FOUND"
+            self.last_error = "Driver WD-Dask tidak terdeteksi (wd-dask64.dll tidak termuat). Standby."
+            print(f"[c_acquisition] {self.last_error}")
             return
 
         print("[c_acquisition] Menginisialisasi kartu ADLink PCI-9846H...")
         self.card_id = self.driver.WD_Register_Card(PCI_9846H, CARD_NUM)
         if self.card_id < 0:
-            print(f"[c_acquisition] Gagal registrasi kartu ADLink (kode={self.card_id}). Memasuki mode standby.")
+            self.status = "HARDWARE_NOT_FOUND"
+            self.last_error = f"Gagal registrasi kartu ADLink PCI-9846H (kode={self.card_id}). Perangkat ADC tidak terpasang."
+            print(f"[c_acquisition] {self.last_error} Memasuki mode standby.")
             return
+
+        self.status = "ACQUIRING"
 
         try:
             # 1. Get Device Properties & Range

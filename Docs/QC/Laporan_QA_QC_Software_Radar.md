@@ -1,120 +1,74 @@
 # LAPORAN QUALITY ASSURANCE (QA) & QUALITY CONTROL (QC)
-## SISTEM PERANGKAT LUNAK RADAR FMCW LPDP RISPRO
-### Pengujian Unit, Pengujian Integrasi, dan Verifikasi Algoritma DSP
+## SISTEM PERANGKAT LUNAK RADAR FMCW REAL-TIME & SPECTRUM ANALYZER
+### Riset Kolaborasi LPDP RISPRO • DKST Institut Teknologi Bandung (ITB)
+
+**Waktu Eksekusi:** 28 September 2026, 12:07:50  
+**Komputer Host:** LAPTOP-IQM7M4DF (Windows 11 (Build 10.0.26200))  
+**User / Operator:** FIRDAUS  
+**Driver C DAQ:** Tersedia (wd-dask64.dll)  
+**Status Hardware ADC:** OFFLINE / SIMULATION (No PCIe Card)  
 
 ---
 
-## 1. Ringkasan Eksekutif (Executive Summary)
-
-Laporan Quality Assurance (QA) dan Quality Control (QC) ini mendokumentasikan hasil pengujian komprehensif terhadap seluruh modul perangkat lunak sistem **Radar FMCW Real-Time & Spectrum Analyzer** yang dikembangkan dalam kerangka riset LPDP RISPRO / DKST ITB.
-
-Pengujian dilakukan menggunakan kerangka kerja pengujian standar industri **`pytest`** dan **`pytest-cov`**, mencakup pengujian unit (*unit testing*), pengujian batas domain (*boundary & edge cases*), pengujian integrasi pipa data (*end-to-end integration testing*), serta pengujian stabilitas memori dan performa komputasi waktu-nyata (*real-time processing*).
-
-### Rangkuman Hasil Pengujian:
-* **Total Kasus Uji (Test Cases)**: 32 Kasus Uji
-* **Tingkat Kelulusan (Pass Rate)**: **100% (32 PASSED, 0 FAILED)**
-* **Waktu Eksekusi**: 1.96 detik
-* **Status Kualitas**: **MEMENUHI SYARAT KELAYAKAN (PRODUCTION-READY / QA APPROVED)**
+## 1. Ringkasan Eksekutif & Hasil Pengujian
+* **Total Kasus Uji:** 36 Kasus Uji
+* **Passed:** 36
+* **Failed:** 0
+* **Skipped:** 0
+* **Tingkat Kelulusan:** 100.0%
+* **Waktu Total Eksekusi:** 2.69 detik
+* **Status Akhir Mutu:** **QA APPROVED (100% PASSED)**
 
 ---
 
-## 2. Metodologi dan Arsitektur Pengujian
+## 2. Matriks Eksekusi Kasus Uji Lengkap
 
-Sistem pengujian perangkat lunak dirancang dengan memisahkan pengujian ke dalam 5 modul suite uji:
-
-1. **`tests/test_config.py` (Parameter & Konfigurasi Sistem)**:
-   Verifikasi integritas konstanta sistem, batasan frekuensi sampling 20 MS/s, alokasi ukuran buffer 20.000 sampel, batas sapuan radar (0° - 180°), jarak maksimum (15 km), parameter peredaman derau FFT, serta konsistensi palet warna tema taktikal.
-2. **`tests/test_data_processing.py` (Inti Pengolahan Sinyal Digital / DSP)**:
-   Pengujian matematis konversi koordinat polar ke Kartesius, algoritma windowing Hann dengan normalisasi *gain* koheren, perhitungan *real* FFT, kalibrasi daya RF terukur (dBm pada impedansi 50 $\Omega$), algoritma penghalus spektrum *Savitzky-Golay*, algoritma ekstraksi puncak target, pemfilteran frekuensi >10 MHz, pemetaan jarak target (*ranging*), dan dinamika pantulan sudut jarum *sweep* PPI (0°–180°).
-3. **`tests/test_c_acquisition.py` (Driver C & Mesin Akuisisi DMA)**:
-   Pengujian inisialisasi pustaka tingkat rendah `wd-dask64.dll`, pemetaan tipe data C melalui `ctypes`, penanganan *asynchronous continuous restart buffer*, serta mekanisme *fallback* simulasi yang aman saat kartu perangkat keras fisik tidak terpasang.
-4. **`tests/test_callbacks_and_queues.py` (Antrean Antar-Thread & UI Callbacks)**:
-   Verifikasi struktur data riwayat target menggunakan ring buffer `collections.deque(maxlen=50)` dengan jaminan kompleksitas waktu $O(1)$ untuk mencegah kebocoran memori (*memory leak*), pengaliran pesan antrean *sweep* dan *target* ke antarmuka, serta prosedur terminasi aman (*graceful shutdown*).
-5. **`tests/test_integration_pipeline.py` (Pengujian Pipa Integrasi End-to-End)**:
-   Pengujian alur data lengkap dari masukan sinyal gelombang mikro mentah sintetis (2 kanal CH0 & CH2 pada 20 MS/s) melalui pemrosesan sinyal FFT, ekstraksi frekuensi beat, estimasi jarak target, hingga pemetaan posisi azimut dan jarak ke bidang koordinat PPI.
-
----
-
-## 3. Matriks Hasil Pengujian (Test Execution Matrix)
-
-| No | Modul Uji | Nama Kasus Uji (*Test Case*) | Kategori | Hasil |
-| :---: | :--- | :--- | :---: | :---: |
-| 1 | `test_config` | `test_project_root_exists` | Konfigurasi | **PASSED** |
-| 2 | `test_config` | `test_hardware_parameters` | Konfigurasi | **PASSED** |
-| 3 | `test_config` | `test_radar_sweep_and_range_limits` | Konfigurasi | **PASSED** |
-| 4 | `test_config` | `test_fft_configuration` | Konfigurasi | **PASSED** |
-| 5 | `test_config` | `test_target_detection_parameters` | Konfigurasi | **PASSED** |
-| 6 | `test_config` | `test_theme_colors` | Konfigurasi | **PASSED** |
-| 7 | `test_data_processing` | `test_polar_to_cartesian_cardinal_angles` | Matematika / DSP | **PASSED** |
-| 8 | `test_data_processing` | `test_smooth_spectrum_empty` | *Edge Case* | **PASSED** |
-| 9 | `test_data_processing` | `test_smooth_spectrum_moving_average` | DSP Filter | **PASSED** |
-| 10 | `test_data_processing` | `test_smooth_spectrum_savgol` | DSP Filter | **PASSED** |
-| 11 | `test_data_processing` | `test_compute_fft_known_frequency` | Akurasi FFT | **PASSED** |
-| 12 | `test_data_processing` | `test_compute_fft_linear` | Format Data | **PASSED** |
-| 13 | `test_data_processing` | `test_find_peak_metrics` | Deteksi Sinyal | **PASSED** |
-| 14 | `test_data_processing` | `test_find_top_extrema` | Deteksi Sinyal | **PASSED** |
-| 15 | `test_data_processing` | `test_find_target_extrema` | *Thresholding* | **PASSED** |
-| 16 | `test_data_processing` | `test_find_filtered_extrema` | *Thresholding* | **PASSED** |
-| 17 | `test_data_processing` | `test_calculate_target_distance` | *Radar Ranging* | **PASSED** |
-| 18 | `test_data_processing` | `test_calculate_target_distance_below_threshold` | *Validation* | **PASSED** |
-| 19 | `test_data_processing` | `test_update_sweep_angle_bounce` | Mekanika PPI | **PASSED** |
-| 20 | `test_data_processing` | `test_smooth_spectrum_edge_cases` | *Edge Case* | **PASSED** |
-| 21 | `test_data_processing` | `test_compute_fft_raw_adc_counts_conversion` | Kalibrasi ADC | **PASSED** |
-| 22 | `test_data_processing` | `test_compute_fft_empty_input` | *Edge Case* | **PASSED** |
-| 23 | `test_data_processing` | `test_calculate_target_distance_channel_modes` | *Multi-Channel* | **PASSED** |
-| 24 | `test_data_processing` | `test_calculate_target_distance_invalid_indices` | *Boundary* | **PASSED** |
-| 25 | `test_data_processing` | `test_process_raw_channels_empty` | *Validation* | **PASSED** |
-| 26 | `test_c_acquisition` | `test_dask_driver_initialization` | Driver DAQ | **PASSED** |
-| 27 | `test_c_acquisition` | `test_engine_initialization_defaults` | Driver DAQ | **PASSED** |
-| 28 | `test_c_acquisition` | `test_engine_start_stop_simulation_fallback` | *Robustness* | **PASSED** |
-| 29 | `test_callbacks_and_queues` | `test_target_history_ring_buffer_limit` | Stabilitas Memori | **PASSED** |
-| 30 | `test_callbacks_and_queues` | `test_update_ui_from_queues_sweep_and_target` | *IPC Queue* | **PASSED** |
-| 31 | `test_callbacks_and_queues` | `test_cleanup_and_exit_sets_stop_event` | *Graceful Shutdown* | **PASSED** |
-| 32 | `test_integration_pipeline` | `test_end_to_end_radar_detection_pipeline` | Integrasi *End-to-End* | **PASSED** |
+| No | Modul Berkas | Nama Kasus Uji | Kategori | Keterangan Status / Verifikasi | Durasi | Hasil |
+| :-: | :--- | :--- | :--- | :--- | :-: | :-: |
+| 1 | `tests/test_c_acquisition.py` | `test_dask_driver_initialization` | Driver C DAQ | Pustaka C berhasil dimuat melalui ctypes dengan antarmuka biner stabil. | 3.6 ms | **PASSED** |
+| 2 | `tests/test_c_acquisition.py` | `test_engine_initialization_defaults` | Driver C DAQ | Inisialisasi status mesin 'INITIALIZED' dan parameter operasional sesuai. | 0.9 ms | **PASSED** |
+| 3 | `tests/test_c_acquisition.py` | `test_hardware_unavailable_on_development_environment` | Hardware Safety | Ketiadaan kartu fisik terdeteksi akurat (is_hardware_available == False). | 2.5 ms | **PASSED** |
+| 4 | `tests/test_c_acquisition.py` | `test_check_hardware_or_raise_fails_when_no_card` | Hardware Safety | RuntimeError dilempar secara deskriptif; status tercatat HARDWARE_NOT_FOUND. | 0.7 ms | **PASSED** |
+| 5 | `tests/test_c_acquisition.py` | `test_engine_start_strict_mode_raises_error` | Hardware Safety | Sistem gagal-cepat (fail-fast) mencegah pembekuan aplikasi pada ketiadaan hardware. | 1.5 ms | **PASSED** |
+| 6 | `tests/test_c_acquisition.py` | `test_acquisition_loop_records_hardware_not_found` | Driver C DAQ | Status kesalahan perangkat keras tercatat rapi di thread log tanpa crash fatal. | 3.7 ms | **PASSED** |
+| 7 | `tests/test_c_acquisition.py` | `test_engine_start_stop_simulation_fallback` | Robustness / DAQ | Thread worker dapat dimulai dan dihentikan secara graceful tanpa memory leak. | 3.5 ms | **PASSED** |
+| 8 | `tests/test_callbacks_and_queues.py` | `test_target_history_ring_buffer_limit` | Stabilitas Memori | Zero Memory Leak terbukti; elemen terlama terbuang otomatis tanpa penumpukan memori. | 0.7 ms | **PASSED** |
+| 9 | `tests/test_callbacks_and_queues.py` | `test_update_ui_from_queues_sweep_and_target` | IPC Queue | Pesan IPC dialirkan ke antarmuka grafis tanpa latensi ataupun pemblokiran thread. | 4.8 ms | **PASSED** |
+| 10 | `tests/test_callbacks_and_queues.py` | `test_cleanup_and_exit_sets_stop_event` | Graceful Shutdown | Seluruh event sinkronisasi thread disetel ke berhenti sebelum penutupan aplikasi. | 1.3 ms | **PASSED** |
+| 11 | `tests/test_config.py` | `test_project_root_exists` | Konfigurasi Sistem | Struktur direktori valid dan berkas utama main.py terkonfirmasi ada. | 0.5 ms | **PASSED** |
+| 12 | `tests/test_config.py` | `test_hardware_parameters` | Konfigurasi Sistem | Parameter sinkron dengan kartu ADC ADLink PCI-9846H. | 0.1 ms | **PASSED** |
+| 13 | `tests/test_config.py` | `test_radar_sweep_and_range_limits` | Konfigurasi Sistem | Batas geometris PPI dan jarak fisik sesuai spesifikasi radar LPDP. | 0.1 ms | **PASSED** |
+| 14 | `tests/test_config.py` | `test_fft_configuration` | Konfigurasi Sistem | Parameter pengolahan spektrum frekuensi terkonfigurasi dengan benar. | 0.2 ms | **PASSED** |
+| 15 | `tests/test_config.py` | `test_target_detection_parameters` | Konfigurasi Sistem | Ambang batas deteksi target dan pemfilteran interferensi valid. | 0.1 ms | **PASSED** |
+| 16 | `tests/test_config.py` | `test_theme_colors` | Konfigurasi Sistem | Seluruh palet warna antarmuka taktikal terdefinisi lengkap. | 0.8 ms | **PASSED** |
+| 17 | `tests/test_data_processing.py` | `test_polar_to_cartesian_cardinal_angles` | Matematika / DSP | Akurasi trigonometri presisi tinggi dengan deviasi absolut < 1e-5. | 0.3 ms | **PASSED** |
+| 18 | `tests/test_data_processing.py` | `test_smooth_spectrum_empty` | Edge Case | Fungsi mengembalikan array kosong secara aman tanpa memicu crash. | 0.3 ms | **PASSED** |
+| 19 | `tests/test_data_processing.py` | `test_smooth_spectrum_moving_average` | DSP Filter | Variansi derau terbukti menurun setelah melalui jendela perataan. | 2.1 ms | **PASSED** |
+| 20 | `tests/test_data_processing.py` | `test_smooth_spectrum_savgol` | DSP Filter | Fluktuasi derau teredam efektif dengan pergeseran puncak Δf ≤ 2 kHz. | 14.2 ms | **PASSED** |
+| 21 | `tests/test_data_processing.py` | `test_compute_fft_known_frequency` | Akurasi FFT | Frekuensi puncak teridentifikasi presisi pada bin 1.0 kHz/bin (250 kHz). | 9.2 ms | **PASSED** |
+| 22 | `tests/test_data_processing.py` | `test_compute_fft_linear` | Format Data | Magnitudo spektrum linier valid dan simetris terhadap domain frekuensi. | 0.8 ms | **PASSED** |
+| 23 | `tests/test_data_processing.py` | `test_find_peak_metrics` | Deteksi Sinyal | SNR dan frekuensi sinyal pantulan target terekstraksi akurat. | 0.1 ms | **PASSED** |
+| 24 | `tests/test_data_processing.py` | `test_find_top_extrema` | Deteksi Sinyal | Puncak spektrum terurut dari magnitudo tertinggi ke terendah. | 4.4 ms | **PASSED** |
+| 25 | `tests/test_data_processing.py` | `test_find_target_extrema` | Thresholding | Hanya sinyal di atas ambang batas daya yang ditetapkan sebagai target. | 0.2 ms | **PASSED** |
+| 26 | `tests/test_data_processing.py` | `test_find_filtered_extrema` | Thresholding | Interferensi frekuensi tinggi berhasil disaring sepenuhnya. | 0.3 ms | **PASSED** |
+| 27 | `tests/test_data_processing.py` | `test_calculate_target_distance` | Radar Ranging | Estimasi jarak target konsisten dengan formula modulasi FMCW. | 0.1 ms | **PASSED** |
+| 28 | `tests/test_data_processing.py` | `test_calculate_target_distance_below_threshold` | Validasi Ranging | Target palsu akibat derau berhasil dicegah dari tampilan radar. | 0.1 ms | **PASSED** |
+| 29 | `tests/test_data_processing.py` | `test_update_sweep_angle_bounce` | Mekanika PPI | Dinamika pergerakan jarum sapuan PPI beroperasi mulus bolak-balik. | 0.6 ms | **PASSED** |
+| 30 | `tests/test_data_processing.py` | `test_smooth_spectrum_edge_cases` | Edge Case | Sistem secara adaptif fallback ke data asli tanpa exception. | 0.1 ms | **PASSED** |
+| 31 | `tests/test_data_processing.py` | `test_compute_fft_raw_adc_counts_conversion` | Kalibrasi ADC | Hasil daya fisik sinyal pantulan sesuai perhitungan analitik teoritis. | 1.9 ms | **PASSED** |
+| 32 | `tests/test_data_processing.py` | `test_compute_fft_empty_input` | Edge Case | Mengembalikan tuple array kosong dengan tipe data float64 yang stabil. | 0.2 ms | **PASSED** |
+| 33 | `tests/test_data_processing.py` | `test_calculate_target_distance_channel_modes` | Multi-Channel | Perhitungan jarak beroperasi konsisten pada seluruh mode kanal. | 0.1 ms | **PASSED** |
+| 34 | `tests/test_data_processing.py` | `test_calculate_target_distance_invalid_indices` | Boundary | Pengecualian indeks di luar batas tertangani tanpa IndexError. | 0.1 ms | **PASSED** |
+| 35 | `tests/test_data_processing.py` | `test_process_raw_channels_empty` | Validasi Pipeline | Mengembalikan output kosong yang aman bagi pemanggil thread. | 0.1 ms | **PASSED** |
+| 36 | `tests/test_integration_pipeline.py` | `test_end_to_end_radar_detection_pipeline` | Integrasi E2E | Aliran data dari sinyal mentah hingga tampilan visual radar teruji 100% lulus. | 11.9 ms | **PASSED** |
 
 ---
 
-## 4. Evaluasi Kualitas Perangkat Lunak (Quality Control Criteria)
-
-### A. Akurasi Algoritma Pemrosesan Sinyal (DSP Precision)
-* **Resolusi Frekuensi**: Pada frekuensi sampling 20 MS/s dengan ukuran buffer 20.000 sampel, resolusi bin frekuensi tercapai secara presisi sebesar **1,0 kHz per bin** ($\Delta f = rac{f_s}{N} = rac{20 	ext{ MHz}}{20.000} = 1 	ext{ kHz}$).
-* **Kalibrasi Daya RF**: Perhitungan daya fisik sinyal pantulan diverifikasi tepat mengacu pada beban standar RF 50 $\Omega$ dengan formula:
-  $$P_{	ext{mW}} = rac{V_{	ext{peak}}^2}{2 	imes 50} 	imes 1000 = 10 	imes V_{	ext{peak}}^2 \implies P_{	ext{dBm}} = 10 \log_{10}(P_{	ext{mW}})$$
-  Hasil uji sinyal $0,5 	ext{ V}_{	ext{peak}}$ menghasilkan daya terkalibrasi $+3,98 	ext{ dBm}$ (sesuai nilai teoritis).
-* **Peredaman Derau (Noise Grass Reduction)**: Filter *Savitzky-Golay* orde 3 berhasil meredam fluktuasi derau acak tanpa menggeser posisi frekuensi puncak target ($\Delta f_{	ext{error}} \le 2 	ext{ kHz}$).
-
-### B. Keandalan dan Stabilitas Memori (Memory & Concurrency Safety)
-* **Zero Memory Leak**: Struktur data riwayat target diverifikasi menggunakan `collections.deque(maxlen=50)`. Pengujian beban penambahan data berulang membuktikan alokasi memori bersifat konstan (*fixed upper bound*) dengan operasi penambahan $O(1)$, menghapuskan potensi akumulasi memori tak terbatas.
-* **Thread Safety**: Komunikasi antar-*thread* diisolasi menggunakan modul bawaan Python `queue.Queue` yang menerapkan penguncian muteks internal (*reentrant mutex*), mencegah terjadinya *data race* atau tabrakan data antara *thread* akuisisi, pemrosesan data, dan *thread* antarmuka GUI.
+## 3. Kriteria Kontrol Kualitas (Quality Control Criteria)
+* **Akurasi DSP**: Resolusi 1.0 kHz/bin pada 20 MS/s. Daya RF terkalibrasi pada beban 50 Ω.
+* **Filter Savitzky-Golay**: Meredam derau rumput efektif tanpa menggeser frekuensi target (Δf ≤ 2 kHz).
+* **Stabilitas Memori**: Ring buffer `collections.deque(maxlen=50)` O(1) bebas kebocoran memori (Zero Leak).
+* **Keamanan Hardware**: Validasi fail-fast ketiadaan hardware dan isolasi mode simulasi teruji aman.
 
 ---
-
-## 5. Panduan Menjalankan Pengujian (Testing Execution SOP)
-
-Untuk mereplikasi dan menjalankan seluruh rangkaian pengujian secara mandiri:
-
-1. Aktifkan lingkungan virtual Python proyek:
-   ```bash
-   .\.venv\Scripts\activate
-   ```
-2. Jalankan seluruh pengujian unit dan integrasi:
-   ```bash
-   pytest
-   ```
-3. Menjalankan pengujian dengan laporan metrik cakupan kode (*coverage report*):
-   ```bash
-   pytest --cov=functions --cov=app --cov=config --cov-report=term-missing
-   ```
-
----
-
-## 6. Kesimpulan dan Pengesahan QA/QC
-
-Berdasarkan seluruh hasil pengujian fungsional, pengujian numerik, pengujian integrasi, dan pengujian batas sistem yang telah dilaksanakan, perangkat lunak **Radar FMCW Real-Time & Spectrum Analyzer** dinyatakan:
-
-**MEMENUHI SELURUH STANDAR MUTU TEKNIS DAN DINYATAKAN LOLOS PENGUJIAN QA/QC (QUALITY ASSURED).**
-
-Bandung, 28 September 2026
-
-**Tim Pengembang Perangkat Lunak / QA Engineer**  
-Radar FMCW LPDP RISPRO  
+*Laporan dibuat secara dinamis oleh `run_qc.py` pada 28 September 2026, 12:07:50*
