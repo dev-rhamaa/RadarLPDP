@@ -71,11 +71,7 @@ def create_fft_widget(parent, width, height):
         
         x_axis = dpg.add_plot_axis(
             dpg.mvXAxis,
-<<<<<<< HEAD
-            label="Beat Frequency (kHz) [Nyquist: 10 MHz • Radar Rx: 5 MHz / 15 km]",
-=======
             label="Beat Frequency (kHz) [Nyquist: 20 MHz • Radar Rx: 5 MHz / 15 km]",
->>>>>>> 4c843a1f9150af01192dd01f3c23b027c2d21d6b
             tag="fft_xaxis"
         )
 

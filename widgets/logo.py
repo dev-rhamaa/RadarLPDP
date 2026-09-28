@@ -38,8 +38,4 @@ def create_logo_widget(parent, width, height):
                 dpg.add_text("Logo aset sedang dimuat...", color=(130, 145, 170))
 
         dpg.add_spacer(height=6)
-<<<<<<< HEAD
-        dpg.add_text("Radar FMCW LPDP RISPRO • C-Band 5.6 GHz • Baseband 20 MS/s (Nyquist 10 MHz) • ITB", color=(110, 125, 150))
-=======
         dpg.add_text("Radar FMCW LPDP RISPRO • C-Band 5.6 GHz • Baseband 40 MS/s (Nyquist 20 MHz) • ITB", color=(110, 125, 150))
->>>>>>> 4c843a1f9150af01192dd01f3c23b027c2d21d6b

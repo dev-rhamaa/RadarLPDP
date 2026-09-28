@@ -239,11 +239,7 @@ def fit_fft_y() -> None:
 
 
 def reset_fft_view() -> None:
-<<<<<<< HEAD
-    """Reset FFT to full 10 MHz Nyquist span and -110 to +10 dBm."""
-=======
     """Reset FFT to full 20 MHz Nyquist span and -110 to +10 dBm."""
->>>>>>> 4c843a1f9150af01192dd01f3c23b027c2d21d6b
     request_axis_zoom("fft_xaxis", 0.0, float(NYQUIST_FREQ_KHZ))
     request_axis_zoom("fft_yaxis", -110.0, 10.0, lock_after=True)
 
