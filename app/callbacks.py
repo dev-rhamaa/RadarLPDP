@@ -76,6 +76,7 @@ TIME_DIV_OPTIONS = [
     ("0.5 us/div (5 us)", 0.5),
     ("0.2 us/div (2 us)", 0.2),
     ("0.1 us/div (1 us)", 0.1),
+    ("0.05 us/div (500 ns)", 0.05),
 ]
 
 V_DIV_OPTIONS = [
@@ -147,7 +148,7 @@ def step_scope_v_div(direction: int) -> None:
 
 
 def set_scope_timebase(span_us: float) -> None:
-    """Set oscilloscope horizontal timebase span (µs), anchored from 0 µs."""
+    """Set oscilloscope horizontal timebase span (us), anchored from 0 us."""
     if not dpg.does_item_exist("sinewave_xaxis"):
         return
     request_axis_zoom("sinewave_xaxis", 0.0, float(span_us))
@@ -242,9 +243,7 @@ def fit_fft_y() -> None:
 
 
 def reset_fft_view() -> None:
-    """Reset FFT to full 10 MHz span and -110 to +10 dBm."""
-    request_axis_zoom("fft_xaxis", 0.0, float(TARGET_FREQ_THRESHOLD_KHZ))
-    """Reset FFT to full 10 MHz Nyquist span and -110 to +10 dBm."""
+    """Reset FFT to full 20 MHz Nyquist span and -110 to +10 dBm."""
     request_axis_zoom("fft_xaxis", 0.0, float(NYQUIST_FREQ_KHZ))
     request_axis_zoom("fft_yaxis", -110.0, 10.0, lock_after=True)
 
@@ -404,12 +403,10 @@ def _update_channel_metrics(channel_prefix: str, metrics: Dict[str, Any]) -> Non
 
 
 def _update_target_detection(channel_prefix: str, metrics: Dict[str, Any]) -> None:
-    """Update target detection display (>10 MHz).
     """Update target detection display (30 kHz - 5 MHz FMCW beat, max 15 km).
     
     Args:
         channel_prefix: Channel identifier (e.g., 'ch1', 'ch2')
-        metrics: Dictionary containing target frequency and magnitude
         metrics: Dictionary containing target frequency, range, and magnitude
     """
     freq_tag = f"{channel_prefix}_target_freq"
@@ -420,9 +417,6 @@ def _update_target_detection(channel_prefix: str, metrics: Dict[str, Any]) -> No
     target_mag = metrics.get('target_mag', 0.0)
     
     if dpg.does_item_exist(freq_tag):
-        if target_freq > 0:
-            # Convert kHz to MHz for display
-            dpg.set_value(freq_tag, f"{target_freq / 1000.0:.3f}")
         if target_freq >= 30.0:
             dpg.set_value(freq_tag, f"{target_freq:.1f}")
         else:
@@ -437,7 +431,6 @@ def _update_target_detection(channel_prefix: str, metrics: Dict[str, Any]) -> No
             dpg.set_value(range_tag, "N/A")
             
     if dpg.does_item_exist(mag_tag):
-        if target_freq > 0:
         if target_freq >= 30.0:
             dpg.set_value(mag_tag, f"{target_mag:.2f}")
         else:
