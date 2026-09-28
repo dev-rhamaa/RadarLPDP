@@ -89,7 +89,7 @@ def create_sinewave_widget(parent, width, height):
         
         x_axis = dpg.add_plot_axis(
             dpg.mvXAxis,
-            label="Time (us) [1 Chirp = 1000 us | Ts = 25 ns (40 MS/s)]",
+            label="Time (us) [1 Chirp = 1000 us | Ts = 50 ns (20 MS/s)]",
             tag="sinewave_xaxis"
         )
         y_axis = dpg.add_plot_axis(

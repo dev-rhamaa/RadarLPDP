@@ -39,7 +39,7 @@ def create_metrics_widget(parent: int | str, width: int, height: int) -> None:
 
         dpg.add_spacer(height=6)
 
-        # 2. Target Detection (30 kHz - 5 MHz • Max 15 km • Nyquist: 20 MHz)
+        # 2. Target Detection (30 kHz - 5 MHz • Max 15 km • Nyquist: 10 MHz)
         dpg.add_text("Target Detection (30 kHz - 5 MHz • Max 15 km):", color=(255, 184, 0))
         with dpg.table(
             header_row=True,

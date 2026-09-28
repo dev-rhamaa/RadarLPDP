@@ -36,17 +36,17 @@ FILENAME: str = str(PROJECT_ROOT / FILENAME_BASE)
 """Absolute path to the live data file."""
 
 # Hardware Parameters (matching ADLink PCI-9846H & FMCW Specifications)
-SAMPLE_RATE: int = 40_000_000
-"""ADC sample rate in Hz (40 MS/s)."""
+SAMPLE_RATE: int = 20_000_000
+"""ADC sample rate in Hz (20 MS/s)."""
 
 NYQUIST_FREQ_HZ: float = SAMPLE_RATE / 2.0
-"""Nyquist limit frequency in Hz (20 MHz)."""
+"""Nyquist limit frequency in Hz (10 MHz)."""
 
 NYQUIST_FREQ_KHZ: float = NYQUIST_FREQ_HZ / 1000.0
-"""Nyquist limit frequency in kHz (20,000 kHz = 20 MHz)."""
+"""Nyquist limit frequency in kHz (10,000 kHz = 10 MHz)."""
 
-BUFFER_SAMPLES: int = 40_000
-"""Number of samples per acquisition buffer (40,000 samples = 1 ms @ 40 MHz)."""
+BUFFER_SAMPLES: int = 20_000
+"""Number of samples per acquisition buffer (20,000 samples = 1 ms @ 20 MHz)."""
 
 NUM_CHANNELS: int = 2
 """Number of ADC channels (CH0 and CH2)."""

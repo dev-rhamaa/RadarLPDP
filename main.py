@@ -30,7 +30,7 @@ def create_top_header():
             dpg.add_text("│", color=(48, 64, 94))
             dpg.add_spacer(width=12)
 
-            dpg.add_text("● PCI-9846H: 40 MS/s", color=(0, 255, 157))
+            dpg.add_text("● PCI-9846H: 20 MS/s", color=(0, 255, 157))
             dpg.add_spacer(width=12)
             dpg.add_text("● ZERO-COPY DMA", color=(0, 210, 255))
             dpg.add_spacer(width=12)

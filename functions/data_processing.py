@@ -431,21 +431,21 @@ def find_filtered_extrema(
     frequencies: NDArray[np.float64],
     magnitudes: NDArray[np.float64],
     index_threshold: int = FILTERED_EXTREMA_INDEX_THRESHOLD,
-    index_max: int = 20_000,
+    index_max: int = 10_000,
     n_extrema: int = 5,
     prominence_db: float = 3.0,
     distance_bins: int = 1
 ) -> Tuple[List[Dict[str, Any]], List[Dict[str, Any]]]:
-    """Find top peaks and valleys within FFT bin index range up to Nyquist limit (20 MHz).
+    """Find top peaks and valleys within FFT bin index range up to Nyquist limit (10 MHz).
     
     This function analyzes spectrum features between index_threshold (default: 30 bins = 30 kHz)
-    and index_max (default: 20,000 bins = 20 MHz Nyquist limit @ 40 MS/s).
+    and index_max (default: 10,000 bins = 10 MHz Nyquist limit @ 20 MS/s).
     
     Args:
         frequencies: Frequency array in kHz from compute_fft
         magnitudes: Magnitude array in dBm from compute_fft
         index_threshold: Minimum FFT bin index to consider (default: 30 bins = 30 kHz)
-        index_max: Maximum FFT bin index to consider (default: 20,000 bins = 20 MHz Nyquist)
+        index_max: Maximum FFT bin index to consider (default: 10,000 bins = 10 MHz Nyquist)
         n_extrema: Number of top peaks/valleys to extract
         prominence_db: Prominence threshold for peak detection in dB
         distance_bins: Minimum distance between peaks in FFT bins
@@ -581,7 +581,7 @@ def process_raw_channels(
         n_extrema=5
     )
 
-    # Extract top peaks and valleys with bin indices across full spectrum (up to Nyquist 20 MHz)
+    # Extract top peaks and valleys with bin indices across full spectrum (up to Nyquist 10 MHz)
     ch1_peaks, ch1_valleys = find_top_extrema(
         freqs_ch1, mag_ch1,
         n_extrema=5,
@@ -595,11 +595,11 @@ def process_raw_channels(
         distance_bins=1
     )
     
-    # Extract filtered peaks and valleys (index 30 up to Nyquist index 20,000 @ 40 MS/s)
+    # Extract filtered peaks and valleys (index 30 up to Nyquist index 10,000 @ 20 MS/s)
     ch1_filtered_peaks, ch1_filtered_valleys = find_filtered_extrema(
         freqs_ch1, mag_ch1,
         index_threshold=FILTERED_EXTREMA_INDEX_THRESHOLD,
-        index_max=20_000,
+        index_max=10_000,
         n_extrema=5,
         prominence_db=3.0,
         distance_bins=1
@@ -607,7 +607,7 @@ def process_raw_channels(
     ch2_filtered_peaks, ch2_filtered_valleys = find_filtered_extrema(
         freqs_ch2, mag_ch2,
         index_threshold=FILTERED_EXTREMA_INDEX_THRESHOLD,
-        index_max=20_000,
+        index_max=10_000,
         n_extrema=5,
         prominence_db=3.0,
         distance_bins=1

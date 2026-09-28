@@ -370,10 +370,10 @@ class NativeCAcquisitionEngine:
             self.driver.WD_AI_CH_Config(self.card_id, -1, ai_range)
             self.driver.WD_AI_Config(self.card_id, WD_IntTimeBase, True, WD_AI_ADCONVSRC_TimePacer, False, True)
 
-            # 3. Calculate sample interval (40 MHz / 40 MHz = 1; 40 MHz / 20 MHz = 2)
+            # 3. Calculate sample interval (40 MHz timebase: 40 MHz / 20 MHz = 2)
             samp_intrv = int(40_000_000 / self.sample_rate_hz)
-            if samp_intrv < 1:
-                samp_intrv = 1
+            if samp_intrv < 2:
+                samp_intrv = 2
 
             # 4. Configure External Digital Trigger (Negative edge, Post trigger)
             self.driver.WD_AI_Trig_Config(
