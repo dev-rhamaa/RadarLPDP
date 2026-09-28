@@ -10,9 +10,9 @@ def _ensure_textures():
 
 
 def create_logo_widget(parent, width, height):
-    """Widget Welcome & Affiliation: menampilkan logo LPDP, DKST ITB, dan KIREI."""
+    """Widget Welcome & Affiliation: menampilkan logo DKST ITB dan KIREI."""
     _ensure_textures()
-    logo_tags = ["logo_lpdp", "logo_dkst", "logo_kirei"]
+    logo_tags = ["logo_dkst", "logo_kirei"]
     available_tags = [t for t in logo_tags if dpg.does_item_exist(t)]
 
     with dpg.group(parent=parent):
