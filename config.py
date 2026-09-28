@@ -117,9 +117,13 @@ WORKER_REFRESH_INTERVAL: float = 0.05
 TARGET_HISTORY_MAX_SIZE: int = 50
 """Maximum number of targets to keep in history."""
 
+TARGET_FREQ_THRESHOLD_KHZ: float = 10_000.0
+"""Frequency threshold for target detection in kHz (10 MHz)."""
 TARGET_FREQ_THRESHOLD_KHZ: float = 30.0
 """Minimum frequency threshold for target detection in kHz (30 kHz = 90 m)."""
 
+FILTERED_EXTREMA_INDEX_THRESHOLD: int = 2000
+"""FFT bin index threshold for filtered extrema analysis."""
 TARGET_FREQ_MAX_KHZ: float = 5000.0
 """Maximum frequency threshold for target detection in kHz (5000 kHz = 5 MHz = 15 km)."""
 
@@ -173,6 +177,7 @@ Colors are in RGBA format (Red, Green, Blue, Alpha).
 # --- Radar Configuration ---
 
 RADAR_MAX_RANGE: float = 15.0
+"""Maximum radar range in meters."""
 """Maximum radar range in kilometers (15 km)."""
 
 RADAR_MIN_RANGE: float = 0.09
