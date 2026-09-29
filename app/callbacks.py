@@ -375,6 +375,21 @@ def update_ui_from_queues(queues: Dict[str, queue.Queue]) -> None:
                 request_axis_zoom("sinewave_xaxis", 0.0, 1000.0)
                 request_axis_zoom("sinewave_yaxis", -35000.0, 35000.0, lock_after=True)
                 _sinewave_initial_fitted = True
+    # Live cursor tracking for Frequency-to-Range conversion on hover
+    if dpg.does_item_exist("fft_plot") and dpg.does_item_exist("fft_cursor_readout"):
+        if dpg.is_item_hovered("fft_plot"):
+            try:
+                pos = dpg.get_plot_mouse_pos()
+                f_khz = float(pos[0])
+                if f_khz >= 0.0:
+                    r_m = f_khz * 3.0
+                    r_km = r_m / 1000.0
+                    if r_km < 1.0:
+                        dpg.set_value("fft_cursor_readout", f"{f_khz:,.1f} kHz ➔ {r_m:.0f} m")
+                    else:
+                        dpg.set_value("fft_cursor_readout", f"{f_khz:,.1f} kHz ➔ {r_km:.2f} km")
+            except Exception:
+                pass
 
     # Process pending unlocks for programmatic zoom requests
     process_pending_unlocks()

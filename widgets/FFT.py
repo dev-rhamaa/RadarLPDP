@@ -43,10 +43,11 @@ def create_fft_widget(parent, width, height):
 
         dpg.add_spacer(width=4)
         dpg.add_text("Span:", color=(130, 145, 170))
-        dpg.add_button(label="10 MHz", small=True, callback=lambda: set_fft_span(10000.0))
-        dpg.add_button(label="5 MHz", small=True, callback=lambda: set_fft_span(5000.0))
-        dpg.add_button(label="2 MHz", small=True, callback=lambda: set_fft_span(2000.0))
-        dpg.add_button(label="500 kHz", small=True, callback=lambda: set_fft_span(500.0))
+        dpg.add_button(label="10M (Nyq)", small=True, callback=lambda: set_fft_span(10000.0))
+        dpg.add_button(label="5M (15km)", small=True, callback=lambda: set_fft_span(5000.0))
+        dpg.add_button(label="2M (6km)", small=True, callback=lambda: set_fft_span(2000.0))
+        dpg.add_button(label="1M (3km)", small=True, callback=lambda: set_fft_span(1000.0))
+        dpg.add_button(label="500k (1.5km)", small=True, callback=lambda: set_fft_span(500.0))
 
         dpg.add_spacer(width=2)
         dpg.add_button(label="+", small=True, callback=lambda: zoom_fft_step(0.5))
@@ -56,8 +57,14 @@ def create_fft_widget(parent, width, height):
         dpg.add_button(label="dBm-Fit", small=True, callback=fit_fft_y)
         dpg.add_button(label="Reset", small=True, callback=reset_fft_view)
 
-        dpg.add_spacer(width=4)
+        dpg.add_spacer(width=2)
         dpg.add_checkbox(label="dBm-Lock", default_value=True, callback=toggle_fft_y_lock, tag="fft_lock_checkbox")
+
+        dpg.add_spacer(width=6)
+        dpg.add_text("Range:", color=(255, 184, 0))
+        dpg.add_text("1 kHz = 3.0 m", color=(0, 255, 157), tag="fft_cursor_readout")
+        if dpg.does_item_exist("font_mono"):
+            dpg.bind_item_font(dpg.last_item(), "font_mono")
 
     with dpg.plot(
         label="Beat Frequency Spectrum (dBm)",
@@ -70,7 +77,7 @@ def create_fft_widget(parent, width, height):
         
         x_axis = dpg.add_plot_axis(
             dpg.mvXAxis,
-            label="Beat Frequency (kHz) [Nyquist: 10 MHz • Radar Rx: 5 MHz / 15 km]",
+            label="Beat Frequency (kHz) ─── [FMCW Scale: 1 kHz = 3.0 m | 1 MHz = 3.0 km | Max Rx: 5 MHz = 15 km]",
             tag="fft_xaxis"
         )
 
