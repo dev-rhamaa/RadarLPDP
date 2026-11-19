@@ -747,89 +747,23 @@ def update_sweep_angle(
 # --- Worker Thread Functions --- #
 
 def angle_worker(ppi_queue: queue.Queue, stop_event: threading.Event) -> None:
-    """Read angle data from serial port and send calibrated angles to PPI queue.
+    """Antenna beam sweep worker driven by KYDAS4801A servo controller.
     
-    This worker reads raw angle data from the serial port, performs direction
-    synchronization, and sends calibrated 0-180 deg angles to the PPI queue.
+    Communicates via serial RS232 with the KYDAS4801A driver, controls back-and-forth
+    sweep motion between 0 and 180 degrees, and streams calibrated angles to the PPI queue.
+    If the hardware is not connected, gracefully falls back to smooth simulated sweeping.
     
     Args:
-        ppi_queue: Queue for sending angle updates
+        ppi_queue: Queue for sending angle updates to PPI display
         stop_event: Event to signal worker shutdown
     """
-    # Synchronization state
-    prev_raw: Optional[float] = None
-    prev_dir: Optional[int] = None
-    base_offset: float = 0.0
-    EPS_MOVEMENT: float = 1e-3  # Movement threshold in degrees
+    try:
+        from app.servo_controller import run_servo_angle_worker
+        run_servo_angle_worker(ppi_queue, stop_event)
+    except Exception as e:
+        print(f"[servo] Exception dalam servo angle worker: {e}")
+        stop_event.wait(2.0)
 
-    while not stop_event.is_set():
-        try:
-            # Coba buka port serial
-            with serial.Serial(SERIAL_PORT, BAUD_RATE, timeout=SERIAL_TIMEOUT) as ser:
-                print(f"Berhasil terhubung ke port serial {SERIAL_PORT}")
-                while not stop_event.is_set():
-                    if ser.in_waiting > 0:
-                        try:
-                            # Baca satu baris dari serial, hilangkan whitespace, dan decode
-                            line = ser.readline().strip()
-                            if not line:
-                                continue
-
-                            angle_str = line.decode('utf-8')
-                            angle = float(angle_str)
-                            
-                            # Synchronization and angle translation
-                            if prev_raw is None:
-                                # First reading - establish baseline
-                                base_offset = angle
-                                prev_raw = angle
-                                prev_dir = None
-                                ui_angle = 0.0
-                                ppi_queue.put({"type": "sweep", "angle": ui_angle})
-                                continue
-
-                            delta = angle - prev_raw
-                            if abs(delta) < EPS_MOVEMENT:
-                                # Minimal movement, ignore
-                                prev_raw = angle
-                                continue
-
-                            curr_dir = 1 if delta > 0 else -1
-
-                            # Detect direction change
-                            if prev_dir is None:
-                                prev_dir = curr_dir
-                                base_offset = angle
-                            elif curr_dir != prev_dir:
-                                # Limit switch hit - reset baseline
-                                prev_dir = curr_dir
-                                base_offset = angle
-
-                            # Translate to 0-180 based on direction
-                            if curr_dir == 1:
-                                # Raw increasing => UI 0→180
-                                ui_angle = angle - base_offset
-                            else:
-                                # Raw decreasing => UI 180→0
-                                ui_angle = 180.0 - (base_offset - angle)
-
-                            # Clamp to valid UI range
-                            ui_angle = max(0.0, min(180.0, ui_angle))
-
-                            ppi_queue.put({"type": "sweep", "angle": ui_angle})
-                            prev_raw = angle
-
-                        except ValueError:
-                            print(f"Failed to convert serial data to number: '{line.decode('utf-8', errors='ignore')}'")
-                        except Exception as read_e:
-                            print(f"Error reading serial data: {read_e}")
-        
-        except serial.SerialException:
-            # Report failure once or when disconnected, then wait without spamming
-            stop_event.wait(5.0)
-        except Exception as e:
-            print(f"Unexpected error in angle_worker: {e}")
-            stop_event.wait(5.0)
 
 def fft_data_worker(
     fft_queue: queue.Queue,

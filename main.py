@@ -8,6 +8,7 @@ import dearpygui.dearpygui as dpg
 
 # Local - app modules
 from app.callbacks import cleanup_and_exit, resize_callback, update_ui_from_queues
+from app.servo_controller import reset_servo_state_on_startup
 from app.setup import initialize_queues_and_events, setup_dpg, start_worker_threads
 
 # Local - widgets
@@ -42,6 +43,18 @@ def create_top_header():
 
             dpg.add_text("STREAM:", color=(130, 145, 170))
             dpg.add_text("0.0 FPS", color=(0, 210, 255), tag="header_fps_count")
+            if dpg.does_item_exist("font_mono"):
+                dpg.bind_item_font(dpg.last_item(), "font_mono")
+
+            dpg.add_spacer(width=12)
+            dpg.add_text("AZIMUTH:", color=(130, 145, 170))
+            dpg.add_text(" 90.0°", color=(0, 255, 157), tag="header_azimuth_angle")
+            if dpg.does_item_exist("font_mono"):
+                dpg.bind_item_font(dpg.last_item(), "font_mono")
+
+            dpg.add_spacer(width=12)
+            dpg.add_text("MOTOR:", color=(130, 145, 170))
+            dpg.add_text("STOPPED", color=(255, 59, 48), tag="header_motor_status")
             if dpg.does_item_exist("font_mono"):
                 dpg.bind_item_font(dpg.last_item(), "font_mono")
 
@@ -85,6 +98,9 @@ def create_main_layout():
 
 # --- Titik Masuk Aplikasi --- #
 if __name__ == "__main__":
+    # 0. Pastikan motor servo selalu mulai dalam status STOPPED saat aplikasi pertama kali dibuka
+    reset_servo_state_on_startup()
+
     # 1. Inisialisasi Dear PyGui (viewport, tema taktis, font HD, handler)
     setup_dpg()
 

@@ -117,13 +117,9 @@ WORKER_REFRESH_INTERVAL: float = 0.05
 TARGET_HISTORY_MAX_SIZE: int = 50
 """Maximum number of targets to keep in history."""
 
-TARGET_FREQ_THRESHOLD_KHZ: float = 10_000.0
-"""Frequency threshold for target detection in kHz (10 MHz)."""
 TARGET_FREQ_THRESHOLD_KHZ: float = 30.0
 """Minimum frequency threshold for target detection in kHz (30 kHz = 90 m)."""
 
-FILTERED_EXTREMA_INDEX_THRESHOLD: int = 2000
-"""FFT bin index threshold for filtered extrema analysis."""
 TARGET_FREQ_MAX_KHZ: float = 5000.0
 """Maximum frequency threshold for target detection in kHz (5000 kHz = 5 MHz = 15 km)."""
 
@@ -133,18 +129,33 @@ TARGET_MAG_THRESHOLD_DBM: float = -80.0
 FILTERED_EXTREMA_INDEX_THRESHOLD: int = 30
 """FFT bin index threshold for filtered extrema analysis (30 bins = 30 kHz)."""
 
-# --- Serial Port Configuration ---
+# --- Servo Motor & Serial Port Configuration (KYDAS4801A) ---
 
-# Default port adapts to OS; can be overridden with RADAR_SERIAL_PORT environment variable
-DEFAULT_SERIAL_PORT: str = "COM3" if os.name == "nt" else "/dev/ttyUSB0"
-SERIAL_PORT: str = os.getenv("RADAR_SERIAL_PORT", DEFAULT_SERIAL_PORT)
-"""Serial port for ESP32/Arduino communication."""
+# Default port adapts to OS; can be overridden with SERVO_COM_PORT or RADAR_SERIAL_PORT
+DEFAULT_SERIAL_PORT: str = "COM13" if os.name == "nt" else "/dev/ttyUSB0"
+SERIAL_PORT: str = os.getenv("RADAR_SERIAL_PORT", os.getenv("SERVO_COM_PORT", DEFAULT_SERIAL_PORT))
+"""Serial port for KYDAS4801A servo position controller (default: COM13)."""
 
 BAUD_RATE: int = 115200
-"""Serial baud rate (must match Arduino code)."""
+"""Serial baud rate for KYDAS4801A servo communication (115200 bps)."""
 
-SERIAL_TIMEOUT: float = 1.0
+SERIAL_TIMEOUT: float = 0.1
 """Serial read timeout in seconds."""
+
+# KYDAS4801A Servo parameters (Calibrated: 0 deg = +140,000 counts, 90 deg = +10,000 counts, 180 deg = -120,000 counts)
+SERVO_CENTER_POSITION: int = 10_000     # 90 degrees (home / posisi awal)
+SERVO_HALF_SPAN: int = 130_000          # ~90 deg span (total 260,000 counts for 180 deg)
+SERVO_MIN_POSITION: int = -120_000      # 180 degrees (lowest encoder counts)
+SERVO_MAX_POSITION: int = 140_000       # 0 degrees (highest encoder counts)
+SERVO_TARGET_0_DEG: int = 140_000       # 0 degrees
+SERVO_TARGET_90_DEG: int = 10_000       # 90 degrees
+SERVO_TARGET_180_DEG: int = -120_000    # 180 degrees
+SERVO_POSITIVE_TARGET: int = 140_000    # 0 degrees
+SERVO_NEGATIVE_TARGET: int = -120_000   # 180 degrees
+SERVO_POSITION_TOLERANCE: int = 150     # counts
+SERVO_POLL_INTERVAL: float = 0.08       # seconds (~12.5 Hz update rate)
+SERVO_START_DELAY: float = 2.0          # seconds to hold position on startup
+SERVO_MOVE_TIMEOUT: float = 120.0       # seconds timeout per sweep
 
 # --- UI Display Configuration ---
 
@@ -177,7 +188,6 @@ Colors are in RGBA format (Red, Green, Blue, Alpha).
 # --- Radar Configuration ---
 
 RADAR_MAX_RANGE: float = 15.0
-"""Maximum radar range in meters."""
 """Maximum radar range in kilometers (15 km)."""
 
 RADAR_MIN_RANGE: float = 0.09

@@ -23,7 +23,7 @@ from config import (
 from widgets.PPI import update_sweep_line, add_target_to_plot
 
 # Global UI state
-last_known_angle: float = 0.0
+last_known_angle: float = 90.0
 target_history: deque = deque(maxlen=TARGET_HISTORY_MAX_SIZE)
 
 # Header Telemetry tracking
@@ -284,22 +284,27 @@ def update_ui_from_queues(queues: Dict[str, queue.Queue]) -> None:
         except Exception:
             pass
 
-    # PPI queue - handles sweep and target messages
-    try:
-        ppi_data = queues['ppi'].get_nowait()
-        
-        if ppi_data['type'] == 'sweep':
-            # Message from angle_worker: update sweep angle and line
-            last_known_angle = ppi_data['angle']
-            update_sweep_line(last_known_angle)
+        try:
+            from app.servo_controller import is_servo_running
+            running = is_servo_running()
+            if dpg.does_item_exist("header_motor_status"):
+                dpg.set_value("header_motor_status", "RUNNING" if running else "STOPPED")
+                dpg.configure_item("header_motor_status", color=(0, 255, 157) if running else (255, 59, 48))
+        except Exception:
+            pass
 
-        elif ppi_data['type'] == 'target':
-            # Message from fft_data_worker: add new target at last known angle
-            distance = ppi_data['distance']
-            new_target = (last_known_angle, distance)
-            target_history.append(new_target)  # deque auto-removes oldest
-            
-            add_target_to_plot(list(target_history))
+    # PPI queue - drain all pending messages for zero-latency servo angle tracking
+    try:
+        while True:
+            ppi_data = queues['ppi'].get_nowait()
+            if ppi_data['type'] == 'sweep':
+                last_known_angle = ppi_data['angle']
+                update_sweep_line(last_known_angle)
+            elif ppi_data['type'] == 'target':
+                distance = ppi_data['distance']
+                new_target = (last_known_angle, distance)
+                target_history.append(new_target)
+                add_target_to_plot(list(target_history))
     except queue.Empty:
         pass
 

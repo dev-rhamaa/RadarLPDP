@@ -1,0 +1,8 @@
+{
+    "running": false,
+    "mode": "scan",
+    "target_deg": 90.0,
+    "target_counts": 10000,
+    "active_target": -120000,
+    "updated_at": 1794987858.0962398
+}
