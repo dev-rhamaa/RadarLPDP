@@ -1,108 +1,30 @@
-"""FFT spectrum display widget.
+"""FFT spectrum display widget (display-only card).
 
-This module provides the laboratory-grade FFT spectrum analyzer display
-for beat frequency estimation and target detection.
+Span, zoom, fit and lock controls live in the menu bar "Spectrum" menu.
 """
 
 import dearpygui.dearpygui as dpg
 
-from app.fonts import FONT_BOLD, FONT_MONO, bind_last_item_font
-
 from config import THEME_COLORS
-from app.callbacks import (
-    set_fft_span,
-    zoom_fft_step,
-    fit_fft_y,
-    reset_fft_view,
-    toggle_fft_y_lock,
-)
-
-
-def _create_fft_themes():
-    """Create dedicated plot themes for CH1 (Cyan) and CH2 (Amber)."""
-    if not dpg.does_item_exist("fft_ch1_theme"):
-        with dpg.theme(tag="fft_ch1_theme"):
-            with dpg.theme_component(dpg.mvLineSeries):
-                dpg.add_theme_color(dpg.mvPlotCol_Line, THEME_COLORS.get("accent", (0, 210, 255, 255)))
-                dpg.add_theme_style(dpg.mvPlotStyleVar_LineWeight, 1.8)
-
-    if not dpg.does_item_exist("fft_ch2_theme"):
-        with dpg.theme(tag="fft_ch2_theme"):
-            with dpg.theme_component(dpg.mvLineSeries):
-                dpg.add_theme_color(dpg.mvPlotCol_Line, THEME_COLORS.get("accent_amber", (255, 184, 0, 255)))
-                dpg.add_theme_style(dpg.mvPlotStyleVar_LineWeight, 1.8)
+from widgets.common import card_header, line_theme
 
 
 def create_fft_widget(parent, width, height):
-    """Membuat widget UI untuk menampilkan FFT Spectrum dengan toolbar span dan interactive zoom."""
-    _create_fft_themes()
+    """Spectrum card: header with live cursor read-out + beat-frequency plot."""
+    line_theme("fft_ch1_theme", THEME_COLORS["accent"], 1.6)
+    line_theme("fft_ch2_theme", THEME_COLORS["accent_amber"], 1.4)
 
-    # Sleek compact frequency span toolbar
-    with dpg.group(horizontal=True, parent=parent):
-        dpg.add_text("SPECTRUM", color=(0, 210, 255))
-        bind_last_item_font(FONT_BOLD)
+    card_header(parent, "Spectrum", "Beat frequency  ·  1 kHz = 3 m",
+                readout_tag="fft_cursor_readout", readout_default="hover plot for range")
 
-        dpg.add_spacer(width=4)
-        dpg.add_text("Span:", color=(130, 145, 170))
-        dpg.add_button(label="10M (Nyq)", small=True, callback=lambda: set_fft_span(10000.0))
-        dpg.add_button(label="5M (15km)", small=True, callback=lambda: set_fft_span(5000.0))
-        dpg.add_button(label="2M (6km)", small=True, callback=lambda: set_fft_span(2000.0))
-        dpg.add_button(label="1M (3km)", small=True, callback=lambda: set_fft_span(1000.0))
-        dpg.add_button(label="500k (1.5km)", small=True, callback=lambda: set_fft_span(500.0))
+    with dpg.plot(parent=parent, height=-1, width=-1, no_title=True, no_menus=True,
+                  no_mouse_pos=True, crosshairs=True, tag="fft_plot"):
+        dpg.add_plot_legend(location=dpg.mvPlot_Location_NorthEast, horizontal=True)
 
-        dpg.add_spacer(width=2)
-        dpg.add_button(label="+", small=True, callback=lambda: zoom_fft_step(0.5))
-        dpg.add_button(label="-", small=True, callback=lambda: zoom_fft_step(2.0))
+        dpg.add_plot_axis(dpg.mvXAxis, label="kHz", tag="fft_xaxis")
+        dpg.add_plot_axis(dpg.mvYAxis, label="dBm", tag="fft_yaxis", lock_min=True, lock_max=True)
 
-        dpg.add_spacer(width=2)
-        dpg.add_button(label="dBm-Fit", small=True, callback=fit_fft_y)
-        dpg.add_button(label="Reset", small=True, callback=reset_fft_view)
-
-        dpg.add_spacer(width=2)
-        dpg.add_checkbox(label="dBm-Lock", default_value=True, callback=toggle_fft_y_lock, tag="fft_lock_checkbox")
-
-        dpg.add_spacer(width=6)
-        dpg.add_text("Range:", color=(255, 184, 0))
-        dpg.add_text("1 kHz = 3.0 m", color=(0, 255, 157), tag="fft_cursor_readout")
-        bind_last_item_font(FONT_MONO)
-
-    with dpg.plot(
-        label="Beat Frequency Spectrum (dBm)",
-        parent=parent,
-        height=-1,
-        width=-1,
-        tag="fft_plot"
-    ):
-        dpg.add_plot_legend(location=dpg.mvPlot_Location_NorthEast)
-        
-        x_axis = dpg.add_plot_axis(
-            dpg.mvXAxis,
-            label="Beat Frequency (kHz) --- [FMCW Scale: 1 kHz = 3.0 m | 1 MHz = 3.0 km | Max Rx: 5 MHz = 15 km]",
-            tag="fft_xaxis"
-        )
-
-        y_axis = dpg.add_plot_axis(
-            dpg.mvYAxis,
-            label="Power Magnitude (dBm)",
-            tag="fft_yaxis",
-            lock_min=True,
-            lock_max=True
-        )
-
-        ch1_series = dpg.add_line_series(
-            [],
-            [],
-            label="CH0 (Beat RF)",
-            parent="fft_yaxis",
-            tag="fft_ch1_series"
-        )
-        dpg.bind_item_theme(ch1_series, "fft_ch1_theme")
-
-        ch2_series = dpg.add_line_series(
-            [],
-            [],
-            label="CH2 (Sync)",
-            parent="fft_yaxis",
-            tag="fft_ch2_series"
-        )
-        dpg.bind_item_theme(ch2_series, "fft_ch2_theme")
+        ch1 = dpg.add_line_series([], [], label="CH0", parent="fft_yaxis", tag="fft_ch1_series")
+        dpg.bind_item_theme(ch1, "fft_ch1_theme")
+        ch2 = dpg.add_line_series([], [], label="CH2", parent="fft_yaxis", tag="fft_ch2_series")
+        dpg.bind_item_theme(ch2, "fft_ch2_theme")

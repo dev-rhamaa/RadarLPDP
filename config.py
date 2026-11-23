@@ -156,20 +156,31 @@ APP_SPACING: int = 8
 APP_PADDING: int = 8
 """Padding for UI elements in pixels."""
 
-# Color Theme - Tactical Dark Aerospace Radar Palette
+# Color Theme - calm dark palette. Each accent has ONE meaning:
+#   accent (mint)   -> CH0 signal, radar beam, primary/positive action
+#   accent_amber    -> CH2 signal
+#   accent_violet   -> UI selection/highlight (menus, sliders, active frames)
+#   danger (coral)  -> targets, STOP, error states
+#   success (green) -> RUNNING / healthy status
 THEME_COLORS: Dict[str, Tuple[int, int, int, int]] = {
-    "background": (11, 15, 23, 255),        # Deep Slate Navy
-    "card_bg": (18, 24, 37, 255),           # Card Container Dark
-    "card_border": (36, 48, 71, 230),       # Subtle Card Border
-    "scan_area": (14, 26, 38, 160),         # PPI Scan Sector
-    "grid_lines": (36, 52, 76, 140),        # PPI & Plot Grid Reticle
-    "text": (240, 246, 255, 255),           # Crisp Primary Text
-    "text_muted": (130, 145, 170, 255),     # Muted Slate Text
-    "accent": (0, 210, 255, 255),           # Cyber Tech Cyan
-    "accent_green": (0, 255, 157, 255),     # Radar Phosphor Green (Sweep)
-    "accent_amber": (255, 184, 0, 255),     # Signal Amber / CH2
-    "target": (255, 59, 48, 255),           # Tactical Target Crimson
-    "plot_bg": (9, 13, 20, 255),            # Oscilloscope Dark Screen
+    "background": (15, 18, 26, 255),        # App background
+    "card_bg": (22, 26, 36, 255),           # Card surface
+    "card_border": (38, 44, 58, 255),       # Hairline card border
+    "surface_hi": (32, 37, 50, 255),        # Raised controls (buttons, inputs)
+    "surface_hover": (42, 48, 64, 255),
+    "grid_lines": (120, 135, 165, 28),      # Plot grid / PPI reticle
+    "text": (226, 232, 240, 255),           # Primary text
+    "text_muted": (128, 138, 160, 255),     # Labels, axis text
+    "text_faint": (82, 92, 112, 255),       # Separators, hints
+    "accent": (94, 234, 212, 255),          # Mint
+    "accent_amber": (251, 191, 114, 255),   # Amber
+    "accent_violet": (139, 146, 240, 255),  # Violet
+    "success": (74, 222, 128, 255),
+    "danger": (248, 113, 113, 255),
+    "plot_bg": (18, 21, 30, 255),           # Plot area, slightly darker than card
+    # Backwards-compatible aliases
+    "accent_green": (74, 222, 128, 255),
+    "target": (248, 113, 113, 255),
 }
 """Color palette for the application theme.
 
