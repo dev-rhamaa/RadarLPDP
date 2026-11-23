@@ -20,11 +20,13 @@ from scipy.signal import find_peaks, get_window, savgol_filter
 from config import (
     FILENAME,
     SAMPLE_RATE,
+    NYQUIST_FREQ_KHZ,
     WORKER_REFRESH_INTERVAL,
     SERIAL_PORT,
     BAUD_RATE,
     SERIAL_TIMEOUT,
     RADAR_MAX_RANGE,
+    RADAR_MIN_RANGE,
     RADAR_SWEEP_ANGLE_MIN,
     RADAR_SWEEP_ANGLE_MAX,
     FFT_SMOOTHING_ENABLED,
@@ -37,6 +39,8 @@ from config import (
     FFT_IMPEDANCE_OHMS,
     FFT_MAGNITUDE_FLOOR_DBM,
     TARGET_FREQ_THRESHOLD_KHZ,
+    TARGET_FREQ_MAX_KHZ,
+    TARGET_MAG_THRESHOLD_DBM,
     FILTERED_EXTREMA_INDEX_THRESHOLD,
 )
 
@@ -334,38 +338,39 @@ def find_top_extrema(
 def find_target_extrema(
     frequencies: NDArray[np.float64],
     magnitudes: NDArray[np.float64],
-    freq_threshold_khz: float = TARGET_FREQ_THRESHOLD_KHZ,
-    n_extrema: int = 3,
+    freq_min_khz: float = TARGET_FREQ_THRESHOLD_KHZ,
+    freq_max_khz: float = TARGET_FREQ_MAX_KHZ,
+    n_extrema: int = 5,
     prominence_db: float = 3.0,
     distance_bins: int = 1
 ) -> Tuple[List[Dict[str, Any]], float, float]:
-    """Find top peaks above a frequency threshold (for target detection).
+    """Find top peaks within the FMCW radar Rx beat frequency passband [30 kHz - 5000 kHz].
     
-    This function filters the spectrum to only consider frequencies above
-    a specified threshold (default 10 MHz) to identify target signals.
+    This function filters the spectrum to consider only frequencies within the
+    radar operational FMCW receiver specification (30 kHz = 90 m to 5000 kHz = 15 km).
     
     Args:
         frequencies: Frequency array in kHz from compute_fft
         magnitudes: Magnitude array in dBm from compute_fft
-        freq_threshold_khz: Frequency threshold in kHz (default: 10,000 kHz = 10 MHz)
+        freq_min_khz: Minimum beat frequency in kHz (default: 30.0 kHz)
+        freq_max_khz: Maximum beat frequency in kHz (default: 5000.0 kHz = 5 MHz)
         n_extrema: Number of top peaks to extract
         prominence_db: Prominence threshold for peak detection in dB
         distance_bins: Minimum distance between peaks in FFT bins
         
     Returns:
         Tuple of (peaks, highest_peak_freq, highest_peak_mag) where:
-        - peaks: List of dicts with keys 'index', 'freq_khz', 'mag_db'
+        - peaks: List of dicts with keys 'index', 'freq_khz', 'range_km', 'mag_db'
         - highest_peak_freq: Frequency of highest peak in kHz
-        - highest_peak_mag: Magnitude of highest peak in dB
+        - highest_peak_mag: Magnitude of highest peak in dBm
     """
     if len(magnitudes) == 0:
         return [], 0.0, 0.0
     
-    # Filter frequencies above threshold
-    freq_mask = frequencies >= freq_threshold_khz
+    # Filter frequencies within FMCW target beat band [30 kHz, 5000 kHz]
+    freq_mask = (frequencies >= freq_min_khz) & (frequencies <= freq_max_khz)
     
     if not np.any(freq_mask):
-        # No frequencies above threshold
         return [], 0.0, 0.0
     
     # Get filtered data
@@ -381,15 +386,17 @@ def find_target_extrema(
     )
     
     if len(peak_idx) == 0:
-        # No peaks found, return highest point
+        # No distinct peak found with prominence, return highest point
         max_idx = np.argmax(filtered_mags)
         highest_freq = float(filtered_freqs[max_idx])
         highest_mag = float(filtered_mags[max_idx])
+        highest_range = float((highest_freq * 3.0) / 1000.0)
         
         return [
             {
                 "index": int(filtered_indices[max_idx]),
                 "freq_khz": highest_freq,
+                "range_km": highest_range,
                 "mag_db": highest_mag
             }
         ], highest_freq, highest_mag
@@ -401,11 +408,12 @@ def find_target_extrema(
         reverse=True
     )[:n_extrema]
     
-    # Build peak list
+    # Build peak list with FMCW physical range
     peaks = [
         {
             "index": int(filtered_indices[i]),
             "freq_khz": float(filtered_freqs[i]),
+            "range_km": float((filtered_freqs[i] * 3.0) / 1000.0),
             "mag_db": float(filtered_mags[i])
         }
         for i in peak_idx_sorted
@@ -423,39 +431,39 @@ def find_filtered_extrema(
     frequencies: NDArray[np.float64],
     magnitudes: NDArray[np.float64],
     index_threshold: int = FILTERED_EXTREMA_INDEX_THRESHOLD,
-    n_extrema: int = 3,
+    index_max: int = 10_000,
+    n_extrema: int = 5,
     prominence_db: float = 3.0,
     distance_bins: int = 1
 ) -> Tuple[List[Dict[str, Any]], List[Dict[str, Any]]]:
-    """Find top peaks and valleys with FFT bin index above threshold.
+    """Find top peaks and valleys within FFT bin index range up to Nyquist limit (10 MHz).
     
-    This function filters the spectrum to only consider FFT bins with
-    index > index_threshold (default: 2000) to analyze higher frequency
-    components of the signal.
+    This function analyzes spectrum features between index_threshold (default: 30 bins = 30 kHz)
+    and index_max (default: 10,000 bins = 10 MHz Nyquist limit @ 20 MS/s).
     
     Args:
         frequencies: Frequency array in kHz from compute_fft
         magnitudes: Magnitude array in dBm from compute_fft
-        index_threshold: Minimum FFT bin index to consider (default: 2000)
+        index_threshold: Minimum FFT bin index to consider (default: 30 bins = 30 kHz)
+        index_max: Maximum FFT bin index to consider (default: 10,000 bins = 10 MHz Nyquist)
         n_extrema: Number of top peaks/valleys to extract
         prominence_db: Prominence threshold for peak detection in dB
         distance_bins: Minimum distance between peaks in FFT bins
         
     Returns:
         Tuple of (peaks, valleys) where each is a list of dicts with
-        keys: 'index', 'freq_khz', 'mag_db'
+        keys: 'index', 'freq_khz', 'range_km', 'mag_db'
     """
     if len(magnitudes) == 0:
         return [], []
     
-    # Filter by index threshold
-    if index_threshold >= len(magnitudes):
-        # Threshold too high, no data available
+    max_idx = min(len(magnitudes), index_max)
+    if index_threshold >= max_idx:
         return [], []
     
-    # Get filtered data starting from index_threshold
-    filtered_freqs = frequencies[index_threshold:]
-    filtered_mags = magnitudes[index_threshold:]
+    # Get filtered data within [index_threshold, max_idx]
+    filtered_freqs = frequencies[index_threshold:max_idx]
+    filtered_mags = magnitudes[index_threshold:max_idx]
     
     if len(filtered_mags) == 0:
         return [], []
@@ -479,6 +487,7 @@ def find_filtered_extrema(
         {
             "index": int(i + index_threshold),
             "freq_khz": float(filtered_freqs[i]),
+            "range_km": float((filtered_freqs[i] * 3.0) / 1000.0),
             "mag_db": float(filtered_mags[i])
         }
         for i in peak_idx_sorted
@@ -558,19 +567,21 @@ def process_raw_channels(
     peak_freq_ch1, peak_mag_ch1 = find_peak_metrics(freqs_ch1, mag_ch1)
     peak_freq_ch2, peak_mag_ch2 = find_peak_metrics(freqs_ch2, mag_ch2)
 
-    # Extract target peaks (>10 MHz by default)
+    # Extract target peaks (30 kHz - 5000 kHz by FMCW radar specification)
     ch1_target_peaks, target_freq_ch1, target_mag_ch1 = find_target_extrema(
         freqs_ch1, mag_ch1,
-        freq_threshold_khz=TARGET_FREQ_THRESHOLD_KHZ,
+        freq_min_khz=TARGET_FREQ_THRESHOLD_KHZ,
+        freq_max_khz=TARGET_FREQ_MAX_KHZ,
         n_extrema=5
     )
     ch2_target_peaks, target_freq_ch2, target_mag_ch2 = find_target_extrema(
         freqs_ch2, mag_ch2,
-        freq_threshold_khz=TARGET_FREQ_THRESHOLD_KHZ,
+        freq_min_khz=TARGET_FREQ_THRESHOLD_KHZ,
+        freq_max_khz=TARGET_FREQ_MAX_KHZ,
         n_extrema=5
     )
 
-    # Extract top peaks and valleys with bin indices
+    # Extract top peaks and valleys with bin indices across full spectrum (up to Nyquist 10 MHz)
     ch1_peaks, ch1_valleys = find_top_extrema(
         freqs_ch1, mag_ch1,
         n_extrema=5,
@@ -584,10 +595,11 @@ def process_raw_channels(
         distance_bins=1
     )
     
-    # Extract filtered peaks and valleys (index > threshold)
+    # Extract filtered peaks and valleys (index 30 up to Nyquist index 10,000 @ 20 MS/s)
     ch1_filtered_peaks, ch1_filtered_valleys = find_filtered_extrema(
         freqs_ch1, mag_ch1,
         index_threshold=FILTERED_EXTREMA_INDEX_THRESHOLD,
+        index_max=10_000,
         n_extrema=5,
         prominence_db=3.0,
         distance_bins=1
@@ -595,6 +607,7 @@ def process_raw_channels(
     ch2_filtered_peaks, ch2_filtered_valleys = find_filtered_extrema(
         freqs_ch2, mag_ch2,
         index_threshold=FILTERED_EXTREMA_INDEX_THRESHOLD,
+        index_max=10_000,
         n_extrema=5,
         prominence_db=3.0,
         distance_bins=1
@@ -640,39 +653,34 @@ def process_raw_channels(
 def calculate_target_distance(
     metrics: Optional[Dict[str, Any]],
     *,
-    mag_threshold_db: float = 80.0,
-    index_min: int = 2_500,
-    index_max: int = 4_096,
+    mag_threshold_db: float = TARGET_MAG_THRESHOLD_DBM,
+    freq_min_khz: float = TARGET_FREQ_THRESHOLD_KHZ,
+    freq_max_khz: float = TARGET_FREQ_MAX_KHZ,
     channel_mode: str = "auto",
     max_range: float = RADAR_MAX_RANGE,
 ) -> Optional[float]:
-    """Estimate target distance using the strongest qualifying FFT peak.
+    """Estimate target distance in kilometers using the strongest qualifying FMCW beat peak.
 
-    Hanya puncak dengan indeks FFT di dalam ``[index_min, index_max]`` yang
-    dipertimbangkan. Puncak terkuat dengan magnitudo minimal ``mag_threshold_db``
-    dipetakan secara linear ke jarak radar menggunakan rentang indeks tersebut
-    dan ``max_range``.
+    Berdasarkan persamaan FMCW Radar:
+        R (m) = f_b (kHz) * 3.0 m
+        R (km) = (f_b * 3.0) / 1000.0
+    Sesuai spesifikasi teknis: rentang beat Rx 30 kHz (90 m) s.d. 5000 kHz (15 km).
 
     Args:
-        metrics: Dictionary containing channel metrics from
-            :func:`process_channel_data`.
-        mag_threshold_db: Minimum magnitude (dB) required for a peak.
-        index_min: Minimum FFT bin index corresponding to zero distance.
-        index_max: Maximum FFT bin index corresponding to ``max_range``.
-        channel_mode: One of ``"auto"``, ``"ch1"``, or ``"ch2"`` determining
-            which channel(s) to inspect.
-        max_range: Maximum radar range in meters used for scaling.
+        metrics: Dictionary containing channel metrics from :func:`process_raw_channels`.
+        mag_threshold_db: Minimum magnitude (dBm) required for a valid target peak.
+        freq_min_khz: Minimum beat frequency in kHz (default: 30.0 kHz = 90 m).
+        freq_max_khz: Maximum beat frequency in kHz (default: 5000.0 kHz = 15 km).
+        channel_mode: One of "auto", "ch1", or "ch2".
+        max_range: Maximum radar range in kilometers (default: 15.0 km).
 
     Returns:
-        Estimated distance in meters, or None if no qualifying peak is found.
+        Estimated distance in kilometers, or None if no qualifying target peak is found.
     """
     if not metrics:
         return None
 
-    if index_max <= index_min:
-        return None
-
-    best_candidate: Optional[Tuple[float, int]] = None  # (mag_db, index)
+    best_candidate: Optional[Tuple[float, float]] = None  # (mag_db, freq_khz)
 
     channel_mode_normalized = channel_mode.lower()
     if channel_mode_normalized == "ch1":
@@ -687,34 +695,31 @@ def calculate_target_distance(
         if not channel_metrics:
             continue
 
-        for peak_list_key in ("filtered_peaks", "peaks"):
+        for peak_list_key in ("target_peaks", "filtered_peaks", "peaks"):
             for peak in channel_metrics.get(peak_list_key, []):
                 peak_mag = peak.get("mag_db")
-                peak_index = peak.get("index")
+                peak_freq = peak.get("freq_khz")
 
-                if peak_mag is None or peak_index is None:
+                if peak_mag is None or peak_freq is None:
                     continue
                 if peak_mag < mag_threshold_db:
                     continue
-                if not (index_min <= peak_index <= index_max):
+                if not (freq_min_khz <= peak_freq <= freq_max_khz):
                     continue
 
                 if best_candidate is None or peak_mag > best_candidate[0]:
-                    best_candidate = (float(peak_mag), int(peak_index))
+                    best_candidate = (float(peak_mag), float(peak_freq))
 
     if not best_candidate:
         return None
 
-    _, peak_index = best_candidate
-    clamped_index = max(index_min, min(index_max, peak_index))
+    _, best_freq = best_candidate
+    distance_km = (best_freq * 3.0) / 1000.0
 
-    normalized = (clamped_index - index_min) / (index_max - index_min)
-    distance = normalized * max_range
-
-    if distance <= 0:
+    if distance_km <= 0:
         return None
 
-    return float(min(distance, max_range))
+    return float(min(distance_km, max_range))
 
 def update_sweep_angle(
     current_angle: float,
@@ -742,89 +747,23 @@ def update_sweep_angle(
 # --- Worker Thread Functions --- #
 
 def angle_worker(ppi_queue: queue.Queue, stop_event: threading.Event) -> None:
-    """Read angle data from serial port and send calibrated angles to PPI queue.
+    """Antenna beam sweep worker driven by KYDAS4801A servo controller.
     
-    This worker reads raw angle data from the serial port, performs direction
-    synchronization, and sends calibrated 0-180° angles to the PPI queue.
+    Communicates via serial RS232 with the KYDAS4801A driver, controls back-and-forth
+    sweep motion between 0 and 180 degrees, and streams calibrated angles to the PPI queue.
+    If the hardware is not connected, gracefully falls back to smooth simulated sweeping.
     
     Args:
-        ppi_queue: Queue for sending angle updates
+        ppi_queue: Queue for sending angle updates to PPI display
         stop_event: Event to signal worker shutdown
     """
-    # Synchronization state
-    prev_raw: Optional[float] = None
-    prev_dir: Optional[int] = None
-    base_offset: float = 0.0
-    EPS_MOVEMENT: float = 1e-3  # Movement threshold in degrees
+    try:
+        from app.servo_controller import run_servo_angle_worker
+        run_servo_angle_worker(ppi_queue, stop_event)
+    except Exception as e:
+        print(f"[servo] Exception dalam servo angle worker: {e}")
+        stop_event.wait(2.0)
 
-    while not stop_event.is_set():
-        try:
-            # Coba buka port serial
-            with serial.Serial(SERIAL_PORT, BAUD_RATE, timeout=SERIAL_TIMEOUT) as ser:
-                print(f"Berhasil terhubung ke port serial {SERIAL_PORT}")
-                while not stop_event.is_set():
-                    if ser.in_waiting > 0:
-                        try:
-                            # Baca satu baris dari serial, hilangkan whitespace, dan decode
-                            line = ser.readline().strip()
-                            if not line:
-                                continue
-
-                            angle_str = line.decode('utf-8')
-                            angle = float(angle_str)
-                            
-                            # Synchronization and angle translation
-                            if prev_raw is None:
-                                # First reading - establish baseline
-                                base_offset = angle
-                                prev_raw = angle
-                                prev_dir = None
-                                ui_angle = 0.0
-                                ppi_queue.put({"type": "sweep", "angle": ui_angle})
-                                continue
-
-                            delta = angle - prev_raw
-                            if abs(delta) < EPS_MOVEMENT:
-                                # Minimal movement, ignore
-                                prev_raw = angle
-                                continue
-
-                            curr_dir = 1 if delta > 0 else -1
-
-                            # Detect direction change
-                            if prev_dir is None:
-                                prev_dir = curr_dir
-                                base_offset = angle
-                            elif curr_dir != prev_dir:
-                                # Limit switch hit - reset baseline
-                                prev_dir = curr_dir
-                                base_offset = angle
-
-                            # Translate to 0-180 based on direction
-                            if curr_dir == 1:
-                                # Raw increasing => UI 0→180
-                                ui_angle = angle - base_offset
-                            else:
-                                # Raw decreasing => UI 180→0
-                                ui_angle = 180.0 - (base_offset - angle)
-
-                            # Clamp to valid UI range
-                            ui_angle = max(0.0, min(180.0, ui_angle))
-
-                            ppi_queue.put({"type": "sweep", "angle": ui_angle})
-                            prev_raw = angle
-
-                        except ValueError:
-                            print(f"Failed to convert serial data to number: '{line.decode('utf-8', errors='ignore')}'")
-                        except Exception as read_e:
-                            print(f"Error reading serial data: {read_e}")
-        
-        except serial.SerialException:
-            # Report failure once or when disconnected, then wait without spamming
-            stop_event.wait(5.0)
-        except Exception as e:
-            print(f"Unexpected error in angle_worker: {e}")
-            stop_event.wait(5.0)
 
 def fft_data_worker(
     fft_queue: queue.Queue,
