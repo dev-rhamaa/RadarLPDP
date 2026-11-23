@@ -142,16 +142,20 @@ BAUD_RATE: int = 115200
 SERIAL_TIMEOUT: float = 0.1
 """Serial read timeout in seconds."""
 
-# KYDAS4801A Servo parameters (Calibrated: 0 deg = +140,000 counts, 90 deg = +10,000 counts, 180 deg = -120,000 counts)
-SERVO_CENTER_POSITION: int = 10_000     # 90 degrees (home / posisi awal)
+# KYDAS4801A Servo parameters (Calibrated: 0 deg = +140,000 counts [KIRI], 90 deg = +10,000 counts [TENGAH], 180 deg = -120,000 counts [KANAN])
+SERVO_CENTER_POSITION: int = 10_000     # 90 degrees (home / center)
 SERVO_HALF_SPAN: int = 130_000          # ~90 deg span (total 260,000 counts for 180 deg)
-SERVO_MIN_POSITION: int = -120_000      # 180 degrees (lowest encoder counts)
-SERVO_MAX_POSITION: int = 140_000       # 0 degrees (highest encoder counts)
-SERVO_TARGET_0_DEG: int = 140_000       # 0 degrees
-SERVO_TARGET_90_DEG: int = 10_000       # 90 degrees
-SERVO_TARGET_180_DEG: int = -120_000    # 180 degrees
-SERVO_POSITIVE_TARGET: int = 140_000    # 0 degrees
-SERVO_NEGATIVE_TARGET: int = -120_000   # 180 degrees
+SERVO_MIN_POSITION: int = -120_000      # 180 degrees (kanan)
+SERVO_MAX_POSITION: int = 140_000       # 0 degrees (kiri)
+SERVO_TARGET_0_DEG: int = 140_000       # 0 degrees (kiri)
+SERVO_TARGET_30_DEG: int = 96_667       # 30 degrees (batas kiri sektor)
+SERVO_TARGET_90_DEG: int = 10_000       # 90 degrees (center)
+SERVO_TARGET_150_DEG: int = -76_667     # 150 degrees (batas kanan sektor)
+SERVO_TARGET_180_DEG: int = -120_000    # 180 degrees (kanan)
+SERVO_SWEEP_MIN_DEG: float = 30.0       # Sector minimum angle (30 degrees - kiri)
+SERVO_SWEEP_MAX_DEG: float = 150.0      # Sector maximum angle (150 degrees - kanan)
+SERVO_POSITIVE_TARGET: int = 96_667     # 30 degrees (kiri)
+SERVO_NEGATIVE_TARGET: int = -76_667    # 150 degrees (kanan)
 SERVO_POSITION_TOLERANCE: int = 150     # counts
 SERVO_POLL_INTERVAL: float = 0.08       # seconds (~12.5 Hz update rate)
 SERVO_START_DELAY: float = 2.0          # seconds to hold position on startup
@@ -193,8 +197,8 @@ RADAR_MAX_RANGE: float = 15.0
 RADAR_MIN_RANGE: float = 0.09
 """Minimum radar range in kilometers (90 meters = 30 kHz beat frequency)."""
 
-RADAR_SWEEP_ANGLE_MIN: float = 0.0
-"""Minimum sweep angle in degrees."""
+RADAR_SWEEP_ANGLE_MIN: float = 30.0
+"""Minimum sweep angle in degrees (30.0 deg sector limit)."""
 
-RADAR_SWEEP_ANGLE_MAX: float = 180.0
-"""Maximum sweep angle in degrees."""
+RADAR_SWEEP_ANGLE_MAX: float = 150.0
+"""Maximum sweep angle in degrees (150.0 deg sector limit)."""

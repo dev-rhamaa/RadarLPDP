@@ -41,6 +41,12 @@ def _create_ppi_themes():
                 dpg.add_theme_color(dpg.mvPlotCol_Line, (0, 210, 255, 80))
                 dpg.add_theme_style(dpg.mvPlotStyleVar_LineWeight, 1.0)
 
+    if not dpg.does_item_exist("ppi_sector_border_theme"):
+        with dpg.theme(tag="ppi_sector_border_theme"):
+            with dpg.theme_component(dpg.mvLineSeries):
+                dpg.add_theme_color(dpg.mvPlotCol_Line, (0, 210, 255, 200))
+                dpg.add_theme_style(dpg.mvPlotStyleVar_LineWeight, 1.8)
+
     if not dpg.does_item_exist("ppi_start_btn_theme"):
         with dpg.theme(tag="ppi_start_btn_theme"):
             with dpg.theme_component(dpg.mvButton):
@@ -175,8 +181,8 @@ def create_ppi_widget(parent, width, height):
         dpg.add_spacer(width=8)
         dpg.add_text("TARGET:", color=(130, 145, 170))
         dpg.add_slider_float(
-            min_value=0.0,
-            max_value=180.0,
+            min_value=30.0,
+            max_value=150.0,
             default_value=90.0,
             format="%.1f deg",
             width=115,
@@ -184,17 +190,17 @@ def create_ppi_widget(parent, width, height):
             callback=_on_target_slider_changed
         )
         dpg.add_spacer(width=4)
-        dpg.add_button(label="0 deg", callback=lambda: _set_preset_angle(0.0), width=44)
-        dpg.add_button(label="45 deg", callback=lambda: _set_preset_angle(45.0), width=44)
+        dpg.add_button(label="30 deg", callback=lambda: _set_preset_angle(30.0), width=44)
+        dpg.add_button(label="60 deg", callback=lambda: _set_preset_angle(60.0), width=44)
         dpg.add_button(label="90 deg", callback=lambda: _set_preset_angle(90.0), width=44)
-        dpg.add_button(label="135 deg", callback=lambda: _set_preset_angle(135.0), width=44)
-        dpg.add_button(label="180 deg", callback=lambda: _set_preset_angle(180.0), width=44)
+        dpg.add_button(label="120 deg", callback=lambda: _set_preset_angle(120.0), width=44)
+        dpg.add_button(label="150 deg", callback=lambda: _set_preset_angle(150.0), width=44)
 
     dpg.add_spacer(parent=parent, height=2)
 
-    # 2. Polar Tactical PPI Radar Plot
+    # 2. Polar Tactical PPI Radar Plot (30° - 150° Sector)
     with dpg.plot(
-        label="Plan Position Indicator (0 - 15 km)",
+        label="Plan Position Indicator (Sector 30° - 150° | 0 - 15 km)",
         parent=parent,
         width=-1,
         height=-1,
@@ -221,32 +227,35 @@ def create_ppi_widget(parent, width, height):
         )
         dpg.set_axis_limits(y_axis, 0, axis_limit)
 
-        # Radial Azimuth Spokes (30°, 60°, 90°, 120°, 150°)
+        # Radial Azimuth Spokes (30°, 60°, 90°, 120°, 150° - dari Kiri ke Kanan)
+        # Orientasi: 0° di Kiri (-X), 90° di Tengah (+Y), 180° di Kanan (+X)
         for angle_deg in [30, 60, 90, 120, 150]:
-            rad = math.radians(angle_deg)
-            x_spoke = [0.0, axis_limit * math.cos(rad)]
-            y_spoke = [0.0, axis_limit * math.sin(rad)]
+            plot_rad = math.radians(180.0 - angle_deg)
+            x_spoke = [0.0, axis_limit * math.cos(plot_rad)]
+            y_spoke = [0.0, axis_limit * math.sin(plot_rad)]
+            is_boundary = (angle_deg in [30, 150])
             spoke_series = dpg.add_line_series(
                 x_spoke,
                 y_spoke,
                 parent=y_axis,
                 label=f"{angle_deg} deg" if angle_deg in [30, 90, 150] else ""
             )
-            dpg.bind_item_theme(spoke_series, "ppi_reticle_theme")
+            dpg.bind_item_theme(spoke_series, "ppi_sector_border_theme" if is_boundary else "ppi_reticle_theme")
 
-        # Concentric Range Rings (e.g. 3, 6, 9, 12, 15 km)
-        theta = np.linspace(0, np.pi, 120)
+        # Concentric Range Rings (30° - 150° sector arcs: 3, 6, 9, 12, 15 km)
+        theta = np.linspace(math.radians(30), math.radians(150), 120)
         step = max(int(axis_limit // 5), 1)
         for r in range(step, axis_limit + 1, step):
             x = r * np.cos(theta)
             y = r * np.sin(theta)
+            is_outer = (r == axis_limit)
             ring_series = dpg.add_line_series(
                 list(x),
                 list(y),
                 parent=y_axis,
                 label=f"{r} km"
             )
-            dpg.bind_item_theme(ring_series, "ppi_reticle_theme")
+            dpg.bind_item_theme(ring_series, "ppi_sector_border_theme" if is_outer else "ppi_reticle_theme")
 
         # Dynamic Sweep Line (Illuminated phosphor green beam)
         sweep_line = dpg.add_line_series(
@@ -270,11 +279,14 @@ def create_ppi_widget(parent, width, height):
 
 
 def update_sweep_line(angle: float) -> None:
-    """Perbarui posisi garis sapuan beam radar mengikuti pembacaan encoder servo."""
+    """Perbarui posisi garis sapuan beam radar mengikuti pembacaan encoder servo (0° di Kiri, 180° di Kanan)."""
     if dpg.does_item_exist("ppi_sweep_line"):
-        angle_rad = np.deg2rad(angle)
-        x_end = float(RADAR_MAX_RANGE * np.cos(angle_rad))
-        y_end = float(RADAR_MAX_RANGE * np.sin(angle_rad))
+        # Batasi sudut sapuan dalam batas sektor [30.0, 150.0] pada tampilan PPI
+        clamped_angle = max(30.0, min(150.0, float(angle)))
+        # Transformasi ke koordinat plot: 0° di kiri (-X) -> 180° di kanan (+X)
+        plot_angle_rad = np.deg2rad(180.0 - clamped_angle)
+        x_end = float(RADAR_MAX_RANGE * np.cos(plot_angle_rad))
+        y_end = float(RADAR_MAX_RANGE * np.sin(plot_angle_rad))
         dpg.set_value("ppi_sweep_line", ([0.0, x_end], [0.0, y_end]))
 
     if dpg.does_item_exist("header_azimuth_angle"):
@@ -282,18 +294,24 @@ def update_sweep_line(angle: float) -> None:
 
 
 def add_target_to_plot(targets: List[Tuple[float, float]]) -> None:
-    """Menggambar semua target yang ada dalam riwayat."""
+    """Menggambar semua target yang ada dalam riwayat (0° di Kiri, 180° di Kanan)."""
     if dpg.does_item_exist("ppi_target_series"):
         if targets:
-            target_angles_rad = np.deg2rad([t[0] for t in targets])
-            target_distances = [t[1] for t in targets]
+            # Hanya tampilkan target yang berada dalam sektor 30° - 150°
+            valid_targets = [t for t in targets if 30.0 <= t[0] <= 150.0]
+            if valid_targets:
+                # Transformasi ke koordinat plot: 0° di kiri (-X) -> 180° di kanan (+X)
+                target_angles_rad = np.deg2rad([180.0 - t[0] for t in valid_targets])
+                target_distances = [t[1] for t in valid_targets]
 
-            x_coords = target_distances * np.cos(target_angles_rad)
-            y_coords = target_distances * np.sin(target_angles_rad)
+                x_coords = target_distances * np.cos(target_angles_rad)
+                y_coords = target_distances * np.sin(target_angles_rad)
 
-            x_coords = np.ascontiguousarray(x_coords, dtype=np.float64)
-            y_coords = np.ascontiguousarray(y_coords, dtype=np.float64)
+                x_coords = np.ascontiguousarray(x_coords, dtype=np.float64)
+                y_coords = np.ascontiguousarray(y_coords, dtype=np.float64)
 
-            dpg.set_value('ppi_target_series', (x_coords, y_coords))
+                dpg.set_value('ppi_target_series', (x_coords, y_coords))
+            else:
+                dpg.set_value('ppi_target_series', ([], []))
         else:
             dpg.set_value('ppi_target_series', ([], []))
