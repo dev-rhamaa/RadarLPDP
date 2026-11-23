@@ -5,28 +5,19 @@ from the ADC, including FFT computation, peak detection, and statistical analysi
 """
 
 import math
-import os
 import queue
 import threading
 import time
 from typing import Any, Dict, List, Optional, Tuple
 
 import numpy as np
-import serial
 from numpy.typing import NDArray
 from scipy.fft import rfft, rfftfreq
 from scipy.signal import find_peaks, get_window, savgol_filter
 
 from config import (
-    FILENAME,
     SAMPLE_RATE,
-    NYQUIST_FREQ_KHZ,
-    WORKER_REFRESH_INTERVAL,
-    SERIAL_PORT,
-    BAUD_RATE,
-    SERIAL_TIMEOUT,
     RADAR_MAX_RANGE,
-    RADAR_MIN_RANGE,
     RADAR_SWEEP_ANGLE_MIN,
     RADAR_SWEEP_ANGLE_MAX,
     FFT_SMOOTHING_ENABLED,
@@ -35,7 +26,6 @@ from config import (
     FFT_SAVGOL_WINDOW,
     FFT_SAVGOL_POLYORDER,
     FFT_MAGNITUDE_MODE,
-    FFT_MAGNITUDE_FLOOR_DB,
     FFT_IMPEDANCE_OHMS,
     FFT_MAGNITUDE_FLOOR_DBM,
     TARGET_FREQ_THRESHOLD_KHZ,
@@ -136,7 +126,7 @@ def compute_fft(
     window: str = "hann",
     smooth: bool = True,
     smooth_window: int = 5,
-    impedance_ohms: float = 50.0
+    impedance_ohms: float = FFT_IMPEDANCE_OHMS
 ) -> Tuple[NDArray[np.float64], NDArray[np.float64]]:
     """Compute FFT spectrum in calibrated physical RF power (dBm) into 50 ohms load.
     
@@ -191,8 +181,7 @@ def compute_fft(
     # P_mW = P_watts * 1000 = (500 / R) * V_peak^2
     # Into 50 ohms: P_mW = 10 * V_peak^2
     # P_dBm = 10 * log10(P_mW) = 10 + 20 * log10(V_peak)
-    imp = float(globals().get("FFT_IMPEDANCE_OHMS", impedance_ohms))
-    scale_factor = 500.0 / max(imp, 1e-6)
+    scale_factor = 500.0 / max(float(impedance_ohms), 1e-6)
     p_mw = scale_factor * (v_peak ** 2)
     magnitudes_dbm = 10.0 * np.log10(np.maximum(p_mw, 1e-15))
 
@@ -206,9 +195,7 @@ def compute_fft(
             savgol_polyorder=FFT_SAVGOL_POLYORDER,
         )
 
-    floor_val = globals().get("FFT_MAGNITUDE_FLOOR_DBM", globals().get("FFT_MAGNITUDE_FLOOR_DB", -120.0))
-    if floor_val is not None:
-        magnitudes_dbm = np.maximum(magnitudes_dbm, floor_val)
+    magnitudes_dbm = np.maximum(magnitudes_dbm, FFT_MAGNITUDE_FLOOR_DBM)
 
     frequencies_khz = rfftfreq(n, d=1.0 / sample_rate) / 1000.0
     return frequencies_khz, magnitudes_dbm
@@ -557,12 +544,10 @@ def process_raw_channels(
         smooth_window=FFT_SMOOTHING_WINDOW
     )
 
-    display_freqs_ch1, display_mag_ch1 = freqs_ch1, mag_ch1
-    display_freqs_ch2, display_mag_ch2 = freqs_ch2, mag_ch2
-
+    display_mag_ch1, display_mag_ch2 = mag_ch1, mag_ch2
     if FFT_MAGNITUDE_MODE.lower() == "linear":
-        display_freqs_ch1, display_mag_ch1 = compute_fft_linear(ch1_ac, sample_rate)
-        display_freqs_ch2, display_mag_ch2 = compute_fft_linear(ch2_ac, sample_rate)
+        _, display_mag_ch1 = compute_fft_linear(ch1_ac, sample_rate)
+        _, display_mag_ch2 = compute_fft_linear(ch2_ac, sample_rate)
 
     peak_freq_ch1, peak_mag_ch1 = find_peak_metrics(freqs_ch1, mag_ch1)
     peak_freq_ch2, peak_mag_ch2 = find_peak_metrics(freqs_ch2, mag_ch2)

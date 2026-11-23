@@ -4,16 +4,18 @@ This module handles DearPyGui initialization, texture loading,
 queue setup, and worker thread management.
 """
 
-import os
 import queue
 import threading
-from pathlib import Path
 from typing import Dict, Tuple, Any
 
 import dearpygui.dearpygui as dpg
 
+from app.c_acquisition import NativeCAcquisitionEngine
 from app.callbacks import resize_callback
-from config import APP_SPACING, APP_PADDING, THEME_COLORS, PROJECT_ROOT
+from app.fonts import setup_fonts
+from config import (
+    THEME_COLORS, PROJECT_ROOT,
+)
 from functions.data_processing import fft_data_worker, sinewave_data_worker, angle_worker
 
 def _preload_textures() -> None:
@@ -37,7 +39,7 @@ def _preload_textures() -> None:
             continue
             
         try:
-            width, height, channels, data = dpg.load_image(str(path))
+            width, height, _channels, data = dpg.load_image(str(path))
             dpg.add_static_texture(
                 width, height, data,
                 tag=tag,
@@ -46,14 +48,11 @@ def _preload_textures() -> None:
         except Exception as e:
             print(f"[textures] Failed to load {path}: {e}")
 
-from app.c_acquisition import NativeCAcquisitionEngine
-
 # Global native acquisition engine reference
 _active_c_daq_engine = None
 
 def get_active_daq_engine():
     """Get the active native C DAQ engine instance."""
-    global _active_c_daq_engine
     return _active_c_daq_engine
 
 def initialize_queues_and_events() -> Tuple[Dict[str, queue.Queue], threading.Event]:
@@ -130,36 +129,11 @@ def start_worker_threads(
         )
     }
 
-    for name, item in threads.items():
+    for item in threads.values():
         if isinstance(item, threading.Thread):
             item.start()
         
     return threads
-
-def _setup_fonts() -> None:
-    """Register modern anti-aliased system fonts for DearPyGui."""
-    if not dpg.does_item_exist("font_registry"):
-        with dpg.font_registry(tag="font_registry"):
-            # Check standard Windows font paths
-            font_segoe = "C:/Windows/Fonts/segoeui.ttf"
-            font_segoe_bold = "C:/Windows/Fonts/segoeuib.ttf"
-            font_consolas = "C:/Windows/Fonts/consola.ttf"
-
-            has_segoe = os.path.exists(font_segoe)
-            has_segoe_bold = os.path.exists(font_segoe_bold)
-            has_consolas = os.path.exists(font_consolas)
-
-            if has_segoe:
-                dpg.add_font(font_segoe, 15, tag="font_default")
-                dpg.bind_font("font_default")
-            
-            if has_segoe_bold:
-                dpg.add_font(font_segoe_bold, 16, tag="font_bold")
-                dpg.add_font(font_segoe_bold, 20, tag="font_title")
-
-            if has_consolas:
-                dpg.add_font(font_consolas, 14, tag="font_mono")
-
 
 def setup_dpg(
     title: str = 'Radar Surveillance & Real-Time Spectrum C2 Console',
@@ -180,7 +154,7 @@ def setup_dpg(
         dpg.add_texture_registry(tag="texture_registry")
 
     # Load high-definition fonts
-    _setup_fonts()
+    setup_fonts()
 
     # Preload logo textures before creating any window/layout
     _preload_textures()

@@ -7,7 +7,7 @@ data from worker threads, handling window resize events, and cleanup operations.
 import queue
 import time
 from collections import deque
-from typing import Any, Dict, List, Tuple
+from typing import Any, Dict, Tuple
 
 import dearpygui.dearpygui as dpg
 import numpy as np
@@ -15,9 +15,7 @@ import numpy as np
 from config import (
     APP_SPACING,
     APP_PADDING,
-    THEME_COLORS,
     TARGET_HISTORY_MAX_SIZE,
-    TARGET_FREQ_THRESHOLD_KHZ,
     NYQUIST_FREQ_KHZ,
 )
 from widgets.PPI import update_sweep_line, add_target_to_plot
@@ -97,7 +95,6 @@ _current_v_div_idx = 0
 
 def apply_scope_divs() -> None:
     """Apply current Time/Div and V/Div to the oscilloscope plot axes."""
-    global _current_time_div_idx, _current_v_div_idx
     if dpg.does_item_exist("sinewave_xaxis"):
         time_div_us = TIME_DIV_OPTIONS[_current_time_div_idx][1]
         request_axis_zoom("sinewave_xaxis", 0.0, float(10.0 * time_div_us))
@@ -145,28 +142,6 @@ def step_scope_v_div(direction: int) -> None:
     new_idx = max(0, min(len(V_DIV_OPTIONS) - 1, _current_v_div_idx + direction))
     _current_v_div_idx = new_idx
     apply_scope_divs()
-
-
-def set_scope_timebase(span_us: float) -> None:
-    """Set oscilloscope horizontal timebase span (us), anchored from 0 us."""
-    if not dpg.does_item_exist("sinewave_xaxis"):
-        return
-    request_axis_zoom("sinewave_xaxis", 0.0, float(span_us))
-
-
-def zoom_scope_step(factor: float) -> None:
-    """Zoom in (factor < 1) or zoom out (factor > 1) horizontally on oscilloscope."""
-    if not dpg.does_item_exist("sinewave_xaxis"):
-        return
-    limits = dpg.get_axis_limits("sinewave_xaxis")
-    cur_span = max(limits[1] - limits[0], 1.0)
-    new_span = min(max(cur_span * factor, 1.0), 1000.0)
-    center = (limits[0] + limits[1]) / 2.0
-    new_min = max(0.0, center - new_span / 2.0)
-    new_max = min(1000.0, new_min + new_span)
-    if new_max - new_min < new_span and new_max >= 1000.0:
-        new_min = max(0.0, 1000.0 - new_span)
-    request_axis_zoom("sinewave_xaxis", new_min, new_max)
 
 
 def fit_scope_y() -> None:
@@ -259,7 +234,7 @@ def update_ui_from_queues(queues: Dict[str, queue.Queue]) -> None:
     Args:
         queues: Dictionary of queues for different data types
     """
-    global last_known_angle, target_history, _frame_count, _last_fps_calc, _current_fps
+    global last_known_angle, _frame_count, _last_fps_calc, _current_fps
     global _fft_initial_fitted, _sinewave_initial_fitted
 
     # 0. Live Top Header Telemetry (1 Hz update rate)
@@ -390,9 +365,9 @@ def update_ui_from_queues(queues: Dict[str, queue.Queue]) -> None:
                     r_m = f_khz * 3.0
                     r_km = r_m / 1000.0
                     if r_km < 1.0:
-                        dpg.set_value("fft_cursor_readout", f"{f_khz:,.1f} kHz ➔ {r_m:.0f} m")
+                        dpg.set_value("fft_cursor_readout", f"{f_khz:,.1f} kHz -> {r_m:.0f} m")
                     else:
-                        dpg.set_value("fft_cursor_readout", f"{f_khz:,.1f} kHz ➔ {r_km:.2f} km")
+                        dpg.set_value("fft_cursor_readout", f"{f_khz:,.1f} kHz -> {r_km:.2f} km")
             except Exception:
                 pass
 

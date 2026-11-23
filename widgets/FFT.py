@@ -6,7 +6,9 @@ for beat frequency estimation and target detection.
 
 import dearpygui.dearpygui as dpg
 
-from config import TARGET_FREQ_THRESHOLD_KHZ, THEME_COLORS
+from app.fonts import FONT_BOLD, FONT_MONO, bind_last_item_font
+
+from config import THEME_COLORS
 from app.callbacks import (
     set_fft_span,
     zoom_fft_step,
@@ -38,8 +40,7 @@ def create_fft_widget(parent, width, height):
     # Sleek compact frequency span toolbar
     with dpg.group(horizontal=True, parent=parent):
         dpg.add_text("SPECTRUM", color=(0, 210, 255))
-        if dpg.does_item_exist("font_bold"):
-            dpg.bind_item_font(dpg.last_item(), "font_bold")
+        bind_last_item_font(FONT_BOLD)
 
         dpg.add_spacer(width=4)
         dpg.add_text("Span:", color=(130, 145, 170))
@@ -63,8 +64,7 @@ def create_fft_widget(parent, width, height):
         dpg.add_spacer(width=6)
         dpg.add_text("Range:", color=(255, 184, 0))
         dpg.add_text("1 kHz = 3.0 m", color=(0, 255, 157), tag="fft_cursor_readout")
-        if dpg.does_item_exist("font_mono"):
-            dpg.bind_item_font(dpg.last_item(), "font_mono")
+        bind_last_item_font(FONT_MONO)
 
     with dpg.plot(
         label="Beat Frequency Spectrum (dBm)",
@@ -77,7 +77,7 @@ def create_fft_widget(parent, width, height):
         
         x_axis = dpg.add_plot_axis(
             dpg.mvXAxis,
-            label="Beat Frequency (kHz) ─── [FMCW Scale: 1 kHz = 3.0 m | 1 MHz = 3.0 km | Max Rx: 5 MHz = 15 km]",
+            label="Beat Frequency (kHz) --- [FMCW Scale: 1 kHz = 3.0 m | 1 MHz = 3.0 km | Max Rx: 5 MHz = 15 km]",
             tag="fft_xaxis"
         )
 

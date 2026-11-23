@@ -14,13 +14,12 @@ Usage:
 import os
 import sys
 import time
-import shutil
 import argparse
 import platform
 import subprocess
 from datetime import datetime
 from pathlib import Path
-from typing import List, Dict, Any, Optional
+from typing import List, Dict, Any
 
 import pytest
 

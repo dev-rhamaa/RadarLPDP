@@ -6,10 +6,10 @@ with dedicated Time/Div and V/Div rotary controls.
 
 import dearpygui.dearpygui as dpg
 
+from app.fonts import FONT_BOLD, bind_last_item_font
+
 from config import THEME_COLORS
 from app.callbacks import (
-    set_scope_timebase,
-    zoom_scope_step,
     fit_scope_y,
     reset_scope_view,
     toggle_scope_y_lock,
@@ -44,8 +44,7 @@ def create_sinewave_widget(parent, width, height):
     # Professional oscilloscope Time/Div and V/Div toolbar
     with dpg.group(horizontal=True, parent=parent):
         dpg.add_text("OSCILLOSCOPE", color=(0, 210, 255))
-        if dpg.does_item_exist("font_bold"):
-            dpg.bind_item_font(dpg.last_item(), "font_bold")
+        bind_last_item_font(FONT_BOLD)
 
         dpg.add_spacer(width=4)
         dpg.add_text("Time/Div:", color=(130, 145, 170))

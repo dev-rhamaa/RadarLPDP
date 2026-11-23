@@ -7,6 +7,8 @@ import math
 from typing import List, Tuple
 
 import dearpygui.dearpygui as dpg
+
+from app.fonts import FONT_BOLD, FONT_MONO, bind_last_item_font
 import numpy as np
 
 from config import RADAR_MAX_RANGE, THEME_COLORS
@@ -137,8 +139,7 @@ def create_ppi_widget(parent, width, height):
     # 1. Sleek Tactical Antenna Steering Control Bar with MULAI & STOP Buttons
     with dpg.group(parent=parent, horizontal=True):
         dpg.add_text("MOTOR:", color=(0, 210, 255))
-        if dpg.does_item_exist("font_bold"):
-            dpg.bind_item_font(dpg.last_item(), "font_bold")
+        bind_last_item_font(FONT_BOLD)
 
         start_btn = dpg.add_button(
             label="MULAI",
@@ -160,11 +161,10 @@ def create_ppi_widget(parent, width, height):
         status_label = "● RUNNING" if init_running else "● STOPPED"
         status_color = (0, 255, 157) if init_running else (255, 59, 48)
         dpg.add_text(status_label, color=status_color, tag="servo_status_text")
-        if dpg.does_item_exist("font_mono"):
-            dpg.bind_item_font(dpg.last_item(), "font_mono")
+        bind_last_item_font(FONT_MONO)
 
         dpg.add_spacer(width=8)
-        dpg.add_text("│", color=(48, 64, 94))
+        dpg.add_text("|", color=(48, 64, 94))
         dpg.add_spacer(width=8)
 
         init_state = get_servo_state()

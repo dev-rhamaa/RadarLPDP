@@ -7,6 +7,7 @@ This file defines the functional radar layout, sleek status ribbon, and runs the
 import dearpygui.dearpygui as dpg
 
 # Local - app modules
+from app.fonts import FONT_BOLD, FONT_MONO, bind_last_item_font
 from app.callbacks import cleanup_and_exit, resize_callback, update_ui_from_queues
 from app.servo_controller import reset_servo_state_on_startup
 from app.setup import initialize_queues_and_events, setup_dpg, start_worker_threads
@@ -23,12 +24,11 @@ def create_top_header():
     """Membuat status ribbon ramping di bagian paling atas aplikasi (height=36)."""
     with dpg.child_window(tag="top_header_bar", height=36, border=True, no_scrollbar=True):
         with dpg.group(horizontal=True):
-            dpg.add_text("📡 FMCW RADAR C2", color=(0, 210, 255))
-            if dpg.does_item_exist("font_bold"):
-                dpg.bind_item_font(dpg.last_item(), "font_bold")
+            dpg.add_text("FMCW RADAR C2", color=(0, 210, 255))
+            bind_last_item_font(FONT_BOLD)
 
             dpg.add_spacer(width=12)
-            dpg.add_text("│", color=(48, 64, 94))
+            dpg.add_text("|", color=(48, 64, 94))
             dpg.add_spacer(width=12)
 
             dpg.add_text("● PCI-9846H: 20 MS/s", color=(0, 255, 157))
@@ -38,36 +38,31 @@ def create_top_header():
             dpg.add_text("● EXT-D TRIGGER", color=(255, 184, 0))
 
             dpg.add_spacer(width=16)
-            dpg.add_text("│", color=(48, 64, 94))
+            dpg.add_text("|", color=(48, 64, 94))
             dpg.add_spacer(width=16)
 
             dpg.add_text("STREAM:", color=(130, 145, 170))
             dpg.add_text("0.0 FPS", color=(0, 210, 255), tag="header_fps_count")
-            if dpg.does_item_exist("font_mono"):
-                dpg.bind_item_font(dpg.last_item(), "font_mono")
+            bind_last_item_font(FONT_MONO)
 
             dpg.add_spacer(width=12)
             dpg.add_text("AZIMUTH:", color=(130, 145, 170))
             dpg.add_text(" 90.0°", color=(0, 255, 157), tag="header_azimuth_angle")
-            if dpg.does_item_exist("font_mono"):
-                dpg.bind_item_font(dpg.last_item(), "font_mono")
+            bind_last_item_font(FONT_MONO)
 
             dpg.add_spacer(width=12)
             dpg.add_text("MOTOR:", color=(130, 145, 170))
             dpg.add_text("STOPPED", color=(255, 59, 48), tag="header_motor_status")
-            if dpg.does_item_exist("font_mono"):
-                dpg.bind_item_font(dpg.last_item(), "font_mono")
+            bind_last_item_font(FONT_MONO)
 
             dpg.add_spacer(width=12)
             dpg.add_text("EVENTS:", color=(130, 145, 170))
             dpg.add_text("0 EVT", color=(240, 246, 255), tag="header_event_count")
-            if dpg.does_item_exist("font_mono"):
-                dpg.bind_item_font(dpg.last_item(), "font_mono")
+            bind_last_item_font(FONT_MONO)
 
             dpg.add_spacer(width=12)
             dpg.add_text("--:--:--", color=(140, 155, 180), tag="header_system_time")
-            if dpg.does_item_exist("font_mono"):
-                dpg.bind_item_font(dpg.last_item(), "font_mono")
+            bind_last_item_font(FONT_MONO)
 
 
 def create_main_layout():

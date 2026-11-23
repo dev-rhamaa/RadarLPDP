@@ -19,7 +19,7 @@ import threading
 import time
 from datetime import datetime
 from pathlib import Path
-from typing import Callable, Dict, List, Optional, Tuple, Any
+from typing import Callable, List, Optional, Tuple
 import numpy as np
 
 from config import (
@@ -33,12 +33,9 @@ from config import (
 )
 
 # Type definitions matching ADLink Wd-dask.h
-U8 = ctypes.c_uint8
 I16 = ctypes.c_int16
 U16 = ctypes.c_uint16
-I32 = ctypes.c_int32
 U32 = ctypes.c_uint32
-F32 = ctypes.c_float
 F64 = ctypes.c_double
 BOOLEAN = ctypes.c_bool
 
@@ -49,7 +46,6 @@ AUTHOR_NAME = "Raihan Muhammad"
 PCI_9846H = 0x17
 CARD_NUM = 0
 
-CHANNEL_COUNT = 2               # CH0 and CH2
 SELECTED_CHANNELS = (0, 2)
 SAMPLE_RATE_HZ = DEFAULT_SAMPLE_RATE_HZ
 BUFFER_SAMPLES = DEFAULT_BUFFER_SAMPLES

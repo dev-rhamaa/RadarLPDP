@@ -2,6 +2,8 @@
 
 import dearpygui.dearpygui as dpg
 
+from app.fonts import FONT_MONO, bind_last_item_font
+
 
 def create_metrics_widget(parent: int | str, width: int, height: int) -> None:
     """Create clean, functional telemetry and target detection tables."""
@@ -22,20 +24,16 @@ def create_metrics_widget(parent: int | str, width: int, height: int) -> None:
             with dpg.table_row():
                 dpg.add_text("CH0 (RF Beat)", color=(0, 210, 255))
                 dpg.add_text("N/A", tag="ch1_peak_freq")
-                if dpg.does_item_exist("font_mono"):
-                    dpg.bind_item_font(dpg.last_item(), "font_mono")
+                bind_last_item_font(FONT_MONO)
                 dpg.add_text("N/A", tag="ch1_peak_mag")
-                if dpg.does_item_exist("font_mono"):
-                    dpg.bind_item_font(dpg.last_item(), "font_mono")
+                bind_last_item_font(FONT_MONO)
 
             with dpg.table_row():
                 dpg.add_text("CH2 (Sync)", color=(255, 184, 0))
                 dpg.add_text("N/A", tag="ch2_peak_freq")
-                if dpg.does_item_exist("font_mono"):
-                    dpg.bind_item_font(dpg.last_item(), "font_mono")
+                bind_last_item_font(FONT_MONO)
                 dpg.add_text("N/A", tag="ch2_peak_mag")
-                if dpg.does_item_exist("font_mono"):
-                    dpg.bind_item_font(dpg.last_item(), "font_mono")
+                bind_last_item_font(FONT_MONO)
 
         dpg.add_spacer(height=6)
 
@@ -56,23 +54,17 @@ def create_metrics_widget(parent: int | str, width: int, height: int) -> None:
             with dpg.table_row():
                 dpg.add_text("CH0", color=(0, 210, 255))
                 dpg.add_text("N/A", tag="ch1_target_freq")
-                if dpg.does_item_exist("font_mono"):
-                    dpg.bind_item_font(dpg.last_item(), "font_mono")
+                bind_last_item_font(FONT_MONO)
                 dpg.add_text("N/A", tag="ch1_target_range")
-                if dpg.does_item_exist("font_mono"):
-                    dpg.bind_item_font(dpg.last_item(), "font_mono")
+                bind_last_item_font(FONT_MONO)
                 dpg.add_text("N/A", tag="ch1_target_mag")
-                if dpg.does_item_exist("font_mono"):
-                    dpg.bind_item_font(dpg.last_item(), "font_mono")
+                bind_last_item_font(FONT_MONO)
 
             with dpg.table_row():
                 dpg.add_text("CH2", color=(255, 184, 0))
                 dpg.add_text("N/A", tag="ch2_target_freq")
-                if dpg.does_item_exist("font_mono"):
-                    dpg.bind_item_font(dpg.last_item(), "font_mono")
+                bind_last_item_font(FONT_MONO)
                 dpg.add_text("N/A", tag="ch2_target_range")
-                if dpg.does_item_exist("font_mono"):
-                    dpg.bind_item_font(dpg.last_item(), "font_mono")
+                bind_last_item_font(FONT_MONO)
                 dpg.add_text("N/A", tag="ch2_target_mag")
-                if dpg.does_item_exist("font_mono"):
-                    dpg.bind_item_font(dpg.last_item(), "font_mono")
+                bind_last_item_font(FONT_MONO)

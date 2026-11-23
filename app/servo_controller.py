@@ -11,8 +11,7 @@ import os
 import queue
 import threading
 import time
-from pathlib import Path
-from typing import Optional, Tuple, Dict, Any
+from typing import Optional, Dict, Any
 
 import serial
 
@@ -37,7 +36,6 @@ TARGET_180_DEG = SERVO_TARGET_180_DEG    # -120_000 counts (180 degrees - Kanan)
 CENTER_POSITION = TARGET_90_DEG          # +10_000 counts
 MIN_POSITION = min(TARGET_0_DEG, TARGET_180_DEG)  # -120_000 counts
 MAX_POSITION = max(TARGET_0_DEG, TARGET_180_DEG)  # +140_000 counts
-HALF_SPAN_COUNTS = (MAX_POSITION - MIN_POSITION) // 2  # 130_000 counts
 
 # Batas Sektor Radar (30° di Kiri sampai 150° di Kanan)
 SWEEP_MIN_DEG = RADAR_SWEEP_ANGLE_MIN    # 30.0 degrees (Kiri)
@@ -45,14 +43,10 @@ SWEEP_MAX_DEG = RADAR_SWEEP_ANGLE_MAX    # 150.0 degrees (Kanan)
 TARGET_SWEEP_MIN = int(round(TARGET_0_DEG + (SWEEP_MIN_DEG / 90.0) * (CENTER_POSITION - TARGET_0_DEG)))   # +96_667 counts (30 deg - Kiri)
 TARGET_SWEEP_MAX = int(round(CENTER_POSITION + ((SWEEP_MAX_DEG - 90.0) / 90.0) * (TARGET_180_DEG - CENTER_POSITION)))  # -76_667 counts (150 deg - Kanan)
 
-POSITIVE_TARGET = max(TARGET_0_DEG, TARGET_180_DEG)  # +140_000 counts
-NEGATIVE_TARGET = min(TARGET_0_DEG, TARGET_180_DEG)  # -120_000 counts
 POSITION_TOLERANCE = SERVO_POSITION_TOLERANCE        # 150 counts (~0.104 deg)
 
 POLL_INTERVAL = SERVO_POLL_INTERVAL      # ~12.5 Hz angle refresh rate
-START_DELAY = 1.0                        # Hold initial position on startup
 RESPONSE_TIMEOUT = 1.0                   # Response deadline for query
-MOVE_TIMEOUT = 120.0                     # Max time allowed per single sweep stroke
 
 STATE_FILE = str(PROJECT_ROOT / "servo_state.json")
 
