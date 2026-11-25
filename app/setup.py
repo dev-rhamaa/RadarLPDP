@@ -4,16 +4,18 @@ This module handles DearPyGui initialization, texture loading,
 queue setup, and worker thread management.
 """
 
-import os
 import queue
 import threading
-from pathlib import Path
 from typing import Dict, Tuple, Any
 
 import dearpygui.dearpygui as dpg
 
+from app.c_acquisition import NativeCAcquisitionEngine
 from app.callbacks import resize_callback
-from config import APP_SPACING, APP_PADDING, THEME_COLORS, PROJECT_ROOT
+from app.fonts import setup_fonts
+from config import (
+    THEME_COLORS, PROJECT_ROOT,
+)
 from functions.data_processing import fft_data_worker, sinewave_data_worker, angle_worker
 
 def _preload_textures() -> None:
@@ -23,7 +25,6 @@ def _preload_textures() -> None:
 
     assets_dir = PROJECT_ROOT / "Assets"
     textures = [
-        ("logo_lpdp", assets_dir / "Logo_LPDP.png"),
         ("logo_dkst", assets_dir / "DKST_ITB.png"),
         ("logo_kirei", assets_dir / "KIREI.png"),
     ]
@@ -37,7 +38,7 @@ def _preload_textures() -> None:
             continue
             
         try:
-            width, height, channels, data = dpg.load_image(str(path))
+            width, height, _channels, data = dpg.load_image(str(path))
             dpg.add_static_texture(
                 width, height, data,
                 tag=tag,
@@ -46,14 +47,95 @@ def _preload_textures() -> None:
         except Exception as e:
             print(f"[textures] Failed to load {path}: {e}")
 
-from app.c_acquisition import NativeCAcquisitionEngine
+def _create_global_theme() -> None:
+    """Calm modern dark theme: soft surfaces, generous spacing, one meaning per accent."""
+    c = THEME_COLORS
+    with dpg.theme(tag="global_theme") as global_theme:
+        with dpg.theme_component(dpg.mvAll):
+            # Shape
+            dpg.add_theme_style(dpg.mvStyleVar_WindowRounding, 10.0)
+            dpg.add_theme_style(dpg.mvStyleVar_ChildRounding, 10.0)
+            dpg.add_theme_style(dpg.mvStyleVar_FrameRounding, 6.0)
+            dpg.add_theme_style(dpg.mvStyleVar_PopupRounding, 8.0)
+            dpg.add_theme_style(dpg.mvStyleVar_ScrollbarRounding, 6.0)
+            dpg.add_theme_style(dpg.mvStyleVar_GrabRounding, 6.0)
+            dpg.add_theme_style(dpg.mvStyleVar_WindowBorderSize, 0.0)
+            dpg.add_theme_style(dpg.mvStyleVar_ChildBorderSize, 1.0)
+            dpg.add_theme_style(dpg.mvStyleVar_PopupBorderSize, 1.0)
+            dpg.add_theme_style(dpg.mvStyleVar_FrameBorderSize, 0.0)
+
+            # Spacing
+            dpg.add_theme_style(dpg.mvStyleVar_WindowPadding, 10, 10)
+            dpg.add_theme_style(dpg.mvStyleVar_FramePadding, 10, 5)
+            dpg.add_theme_style(dpg.mvStyleVar_ItemSpacing, 10, 8)
+            dpg.add_theme_style(dpg.mvStyleVar_ItemInnerSpacing, 8, 6)
+            dpg.add_theme_style(dpg.mvStyleVar_CellPadding, 10, 6)
+            dpg.add_theme_style(dpg.mvStyleVar_ScrollbarSize, 10)
+
+            # Surfaces
+            dpg.add_theme_color(dpg.mvThemeCol_WindowBg, c["background"])
+            dpg.add_theme_color(dpg.mvThemeCol_ChildBg, c["card_bg"])
+            dpg.add_theme_color(dpg.mvThemeCol_PopupBg, (26, 30, 42, 252))
+            dpg.add_theme_color(dpg.mvThemeCol_ModalWindowDimBg, (5, 7, 12, 170))
+            dpg.add_theme_color(dpg.mvThemeCol_Border, c["card_border"])
+            dpg.add_theme_color(dpg.mvThemeCol_BorderShadow, (0, 0, 0, 0))
+            dpg.add_theme_color(dpg.mvThemeCol_MenuBarBg, c["card_bg"])
+            dpg.add_theme_color(dpg.mvThemeCol_TitleBg, c["card_bg"])
+            dpg.add_theme_color(dpg.mvThemeCol_TitleBgActive, c["card_bg"])
+            dpg.add_theme_color(dpg.mvThemeCol_ScrollbarBg, (0, 0, 0, 0))
+
+            # Controls
+            dpg.add_theme_color(dpg.mvThemeCol_FrameBg, c["surface_hi"])
+            dpg.add_theme_color(dpg.mvThemeCol_FrameBgHovered, c["surface_hover"])
+            dpg.add_theme_color(dpg.mvThemeCol_FrameBgActive, (52, 58, 78, 255))
+            dpg.add_theme_color(dpg.mvThemeCol_Button, c["surface_hi"])
+            dpg.add_theme_color(dpg.mvThemeCol_ButtonHovered, c["surface_hover"])
+            dpg.add_theme_color(dpg.mvThemeCol_ButtonActive, (139, 146, 240, 120))
+            dpg.add_theme_color(dpg.mvThemeCol_Header, (139, 146, 240, 50))
+            dpg.add_theme_color(dpg.mvThemeCol_HeaderHovered, (139, 146, 240, 80))
+            dpg.add_theme_color(dpg.mvThemeCol_HeaderActive, (139, 146, 240, 120))
+            dpg.add_theme_color(dpg.mvThemeCol_CheckMark, c["accent"])
+            dpg.add_theme_color(dpg.mvThemeCol_SliderGrab, c["accent_violet"])
+            dpg.add_theme_color(dpg.mvThemeCol_SliderGrabActive, c["accent"])
+            dpg.add_theme_color(dpg.mvThemeCol_Separator, c["card_border"])
+            dpg.add_theme_color(dpg.mvThemeCol_SeparatorHovered, c["accent_violet"])
+            dpg.add_theme_color(dpg.mvThemeCol_NavHighlight, c["accent_violet"])
+
+            # Text
+            dpg.add_theme_color(dpg.mvThemeCol_Text, c["text"])
+            dpg.add_theme_color(dpg.mvThemeCol_TextDisabled, c["text_muted"])
+
+            # Tables: no heavy grid, subtle header
+            dpg.add_theme_color(dpg.mvThemeCol_TableHeaderBg, (30, 35, 48, 255))
+            dpg.add_theme_color(dpg.mvThemeCol_TableBorderStrong, c["card_border"])
+            dpg.add_theme_color(dpg.mvThemeCol_TableBorderLight, (38, 44, 58, 160))
+            dpg.add_theme_color(dpg.mvThemeCol_TableRowBg, (0, 0, 0, 0))
+            dpg.add_theme_color(dpg.mvThemeCol_TableRowBgAlt, (255, 255, 255, 6))
+
+        with dpg.theme_component(dpg.mvAll):
+            # Plots blend into the card: no frame, faint grid, muted axis text
+            dpg.add_theme_color(dpg.mvPlotCol_FrameBg, (0, 0, 0, 0), category=dpg.mvThemeCat_Plots)
+            dpg.add_theme_color(dpg.mvPlotCol_PlotBg, c["plot_bg"], category=dpg.mvThemeCat_Plots)
+            dpg.add_theme_color(dpg.mvPlotCol_PlotBorder, (0, 0, 0, 0), category=dpg.mvThemeCat_Plots)
+            dpg.add_theme_color(dpg.mvPlotCol_AxisGrid, c["grid_lines"], category=dpg.mvThemeCat_Plots)
+            dpg.add_theme_color(dpg.mvPlotCol_AxisText, c["text_muted"], category=dpg.mvThemeCat_Plots)
+            dpg.add_theme_color(dpg.mvPlotCol_LegendBg, (22, 26, 36, 200), category=dpg.mvThemeCat_Plots)
+            dpg.add_theme_color(dpg.mvPlotCol_LegendBorder, (0, 0, 0, 0), category=dpg.mvThemeCat_Plots)
+            dpg.add_theme_color(dpg.mvPlotCol_LegendText, c["text_muted"], category=dpg.mvThemeCat_Plots)
+            dpg.add_theme_color(dpg.mvPlotCol_InlayText, c["text_muted"], category=dpg.mvThemeCat_Plots)
+            dpg.add_theme_color(dpg.mvPlotCol_Crosshairs, (226, 232, 240, 90), category=dpg.mvThemeCat_Plots)
+            dpg.add_theme_style(dpg.mvPlotStyleVar_PlotPadding, 4, 4, category=dpg.mvThemeCat_Plots)
+            dpg.add_theme_style(dpg.mvPlotStyleVar_LegendPadding, 8, 6, category=dpg.mvThemeCat_Plots)
+            dpg.add_theme_style(dpg.mvPlotStyleVar_LineWeight, 1.6, category=dpg.mvThemeCat_Plots)
+
+    dpg.bind_theme(global_theme)
+
 
 # Global native acquisition engine reference
 _active_c_daq_engine = None
 
 def get_active_daq_engine():
     """Get the active native C DAQ engine instance."""
-    global _active_c_daq_engine
     return _active_c_daq_engine
 
 def initialize_queues_and_events() -> Tuple[Dict[str, queue.Queue], threading.Event]:
@@ -130,36 +212,11 @@ def start_worker_threads(
         )
     }
 
-    for name, item in threads.items():
+    for item in threads.values():
         if isinstance(item, threading.Thread):
             item.start()
         
     return threads
-
-def _setup_fonts() -> None:
-    """Register modern anti-aliased system fonts for DearPyGui."""
-    if not dpg.does_item_exist("font_registry"):
-        with dpg.font_registry(tag="font_registry"):
-            # Check standard Windows font paths
-            font_segoe = "C:/Windows/Fonts/segoeui.ttf"
-            font_segoe_bold = "C:/Windows/Fonts/segoeuib.ttf"
-            font_consolas = "C:/Windows/Fonts/consola.ttf"
-
-            has_segoe = os.path.exists(font_segoe)
-            has_segoe_bold = os.path.exists(font_segoe_bold)
-            has_consolas = os.path.exists(font_consolas)
-
-            if has_segoe:
-                dpg.add_font(font_segoe, 15, tag="font_default")
-                dpg.bind_font("font_default")
-            
-            if has_segoe_bold:
-                dpg.add_font(font_segoe_bold, 16, tag="font_bold")
-                dpg.add_font(font_segoe_bold, 20, tag="font_title")
-
-            if has_consolas:
-                dpg.add_font(font_consolas, 14, tag="font_mono")
-
 
 def setup_dpg(
     title: str = 'Radar Surveillance & Real-Time Spectrum C2 Console',
@@ -180,85 +237,12 @@ def setup_dpg(
         dpg.add_texture_registry(tag="texture_registry")
 
     # Load high-definition fonts
-    _setup_fonts()
+    setup_fonts()
 
     # Preload logo textures before creating any window/layout
     _preload_textures()
 
-    # Define modern military-grade tactical dark theme
-    with dpg.theme(tag="global_theme") as global_theme:
-        with dpg.theme_component(dpg.mvAll):
-            # Modern roundings
-            dpg.add_theme_style(dpg.mvStyleVar_ChildRounding, 8.0)
-            dpg.add_theme_style(dpg.mvStyleVar_FrameRounding, 6.0)
-            dpg.add_theme_style(dpg.mvStyleVar_WindowRounding, 8.0)
-            dpg.add_theme_style(dpg.mvStyleVar_PopupRounding, 6.0)
-            dpg.add_theme_style(dpg.mvStyleVar_ScrollbarRounding, 6.0)
-            dpg.add_theme_style(dpg.mvStyleVar_GrabRounding, 4.0)
-
-            # Modern breathing room
-            dpg.add_theme_style(dpg.mvStyleVar_WindowPadding, 8, 8)
-            dpg.add_theme_style(dpg.mvStyleVar_FramePadding, 8, 5)
-            dpg.add_theme_style(dpg.mvStyleVar_ItemSpacing, 8, 8)
-            dpg.add_theme_style(dpg.mvStyleVar_CellPadding, 6, 4)
-
-            # Palette: Deep Tactical Dark
-            dpg.add_theme_color(dpg.mvThemeCol_WindowBg, THEME_COLORS["background"])
-            dpg.add_theme_color(dpg.mvThemeCol_ChildBg, THEME_COLORS["card_bg"])
-            dpg.add_theme_color(dpg.mvThemeCol_PopupBg, (22, 28, 42, 255))
-            dpg.add_theme_color(dpg.mvThemeCol_Border, THEME_COLORS["card_border"])
-            dpg.add_theme_color(dpg.mvThemeCol_BorderShadow, (0, 0, 0, 0))
-
-            # Controls: Frames, Headers & Buttons
-            dpg.add_theme_color(dpg.mvThemeCol_FrameBg, (13, 18, 28, 255))
-            dpg.add_theme_color(dpg.mvThemeCol_FrameBgHovered, (24, 34, 52, 255))
-            dpg.add_theme_color(dpg.mvThemeCol_FrameBgActive, (32, 45, 68, 255))
-            
-            dpg.add_theme_color(dpg.mvThemeCol_TitleBg, (14, 20, 32, 255))
-            dpg.add_theme_color(dpg.mvThemeCol_TitleBgActive, (20, 30, 48, 255))
-            dpg.add_theme_color(dpg.mvThemeCol_MenuBarBg, (14, 20, 32, 255))
-
-            dpg.add_theme_color(dpg.mvThemeCol_Button, (25, 36, 56, 255))
-            dpg.add_theme_color(dpg.mvThemeCol_ButtonHovered, (36, 52, 80, 255))
-            dpg.add_theme_color(dpg.mvThemeCol_ButtonActive, (0, 180, 216, 255))
-
-            dpg.add_theme_color(dpg.mvThemeCol_Header, (25, 36, 56, 255))
-            dpg.add_theme_color(dpg.mvThemeCol_HeaderHovered, (36, 52, 80, 255))
-            dpg.add_theme_color(dpg.mvThemeCol_HeaderActive, (0, 210, 255, 180))
-
-            dpg.add_theme_color(dpg.mvThemeCol_CheckMark, THEME_COLORS["accent_green"])
-            dpg.add_theme_color(dpg.mvThemeCol_SliderGrab, THEME_COLORS["accent"])
-            dpg.add_theme_color(dpg.mvThemeCol_SliderGrabActive, THEME_COLORS["accent_green"])
-
-            dpg.add_theme_color(dpg.mvThemeCol_Separator, THEME_COLORS["card_border"])
-            dpg.add_theme_color(dpg.mvThemeCol_SeparatorHovered, THEME_COLORS["accent"])
-
-            # Text
-            dpg.add_theme_color(dpg.mvThemeCol_Text, THEME_COLORS["text"])
-            dpg.add_theme_color(dpg.mvThemeCol_TextDisabled, THEME_COLORS["text_muted"])
-
-            # Tables
-            dpg.add_theme_color(dpg.mvThemeCol_TableHeaderBg, (24, 33, 52, 255))
-            dpg.add_theme_color(dpg.mvThemeCol_TableBorderStrong, (45, 60, 88, 255))
-            dpg.add_theme_color(dpg.mvThemeCol_TableBorderLight, (28, 38, 56, 180))
-            dpg.add_theme_color(dpg.mvThemeCol_TableRowBg, (16, 21, 33, 255))
-            dpg.add_theme_color(dpg.mvThemeCol_TableRowBgAlt, (20, 26, 40, 255))
-
-            # Plots
-            dpg.add_theme_color(dpg.mvPlotCol_PlotBg, THEME_COLORS["plot_bg"])
-            dpg.add_theme_color(dpg.mvPlotCol_PlotBorder, THEME_COLORS["card_border"])
-            dpg.add_theme_color(dpg.mvPlotCol_LegendBg, (14, 20, 32, 220))
-            dpg.add_theme_color(dpg.mvPlotCol_LegendBorder, THEME_COLORS["card_border"])
-            dpg.add_theme_color(dpg.mvPlotCol_LegendText, THEME_COLORS["text"])
-
-    dpg.bind_theme(global_theme)
-
-    # Setup handler for Esc key to exit
-    with dpg.handler_registry():
-        dpg.add_key_press_handler(
-            key=dpg.mvKey_Escape,
-            callback=dpg.stop_dearpygui
-        )
+    _create_global_theme()
 
     # Configure viewport
     dpg.create_viewport(title=title, width=width, height=height)

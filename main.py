@@ -1,12 +1,14 @@
 """Main entry point for Radar LPDP application.
 
-This file defines the functional radar layout, sleek status ribbon, and runs the main loop.
+Layout: menu bar (all controls + live status) over a two-column workspace of
+display-only cards. See app/ui_shell.py for menus, Settings and shortcuts.
 """
 
 # Third-party
 import dearpygui.dearpygui as dpg
 
 # Local - app modules
+from app import settings, ui_shell
 from app.callbacks import cleanup_and_exit, resize_callback, update_ui_from_queues
 from app.servo_controller import reset_servo_state_on_startup
 from app.setup import initialize_queues_and_events, setup_dpg, start_worker_threads
@@ -19,94 +21,40 @@ from widgets.logo import create_logo_widget
 from widgets.metrics import create_metrics_widget
 
 
-def create_top_header():
-    """Membuat status ribbon ramping di bagian paling atas aplikasi (height=36)."""
-    with dpg.child_window(tag="top_header_bar", height=36, border=True, no_scrollbar=True):
-        with dpg.group(horizontal=True):
-            dpg.add_text("📡 FMCW RADAR C2", color=(0, 210, 255))
-            if dpg.does_item_exist("font_bold"):
-                dpg.bind_item_font(dpg.last_item(), "font_bold")
-
-            dpg.add_spacer(width=12)
-            dpg.add_text("│", color=(48, 64, 94))
-            dpg.add_spacer(width=12)
-
-            dpg.add_text("● PCI-9846H: 20 MS/s", color=(0, 255, 157))
-            dpg.add_spacer(width=12)
-            dpg.add_text("● ZERO-COPY DMA", color=(0, 210, 255))
-            dpg.add_spacer(width=12)
-            dpg.add_text("● EXT-D TRIGGER", color=(255, 184, 0))
-
-            dpg.add_spacer(width=16)
-            dpg.add_text("│", color=(48, 64, 94))
-            dpg.add_spacer(width=16)
-
-            dpg.add_text("STREAM:", color=(130, 145, 170))
-            dpg.add_text("0.0 FPS", color=(0, 210, 255), tag="header_fps_count")
-            if dpg.does_item_exist("font_mono"):
-                dpg.bind_item_font(dpg.last_item(), "font_mono")
-
-            dpg.add_spacer(width=12)
-            dpg.add_text("AZIMUTH:", color=(130, 145, 170))
-            dpg.add_text(" 90.0°", color=(0, 255, 157), tag="header_azimuth_angle")
-            if dpg.does_item_exist("font_mono"):
-                dpg.bind_item_font(dpg.last_item(), "font_mono")
-
-            dpg.add_spacer(width=12)
-            dpg.add_text("MOTOR:", color=(130, 145, 170))
-            dpg.add_text("STOPPED", color=(255, 59, 48), tag="header_motor_status")
-            if dpg.does_item_exist("font_mono"):
-                dpg.bind_item_font(dpg.last_item(), "font_mono")
-
-            dpg.add_spacer(width=12)
-            dpg.add_text("EVENTS:", color=(130, 145, 170))
-            dpg.add_text("0 EVT", color=(240, 246, 255), tag="header_event_count")
-            if dpg.does_item_exist("font_mono"):
-                dpg.bind_item_font(dpg.last_item(), "font_mono")
-
-            dpg.add_spacer(width=12)
-            dpg.add_text("--:--:--", color=(140, 155, 180), tag="header_system_time")
-            if dpg.does_item_exist("font_mono"):
-                dpg.bind_item_font(dpg.last_item(), "font_mono")
+def _card(tag: str, builder) -> None:
+    with dpg.child_window(tag=tag, border=True, no_scrollbar=True) as win:
+        builder(parent=win, width=-1, height=-1)
 
 
 def create_main_layout():
-    """Mendefinisikan dan membuat semua widget fungsional di dalam window utama."""
-    with dpg.window(tag="Primary Window", no_scrollbar=True):
-        # 1. Sleek Single-Line Status Ribbon
-        create_top_header()
-        dpg.add_spacer(height=2)
+    """Primary window: menu bar + two columns of cards (sized by resize_callback)."""
+    with dpg.window(tag="Primary Window", menubar=True, no_scrollbar=True):
+        ui_shell.build_menu_bar()
 
-        # 2. Functional Two-Column Workspace (Maximizing Canvas Space)
         with dpg.group(horizontal=True, tag="main_content_group"):
-            # Kolom kiri: Layar PPI Radar Taktis & Spektrum Frekuensi FFT
             with dpg.group(tag="left_column"):
-                with dpg.child_window(label="PPI Radar Display (0 - 15 km)", tag="ppi_window", no_scrollbar=True) as ppi_win:
-                    create_ppi_widget(parent=ppi_win, width=-1, height=-1)
-                with dpg.child_window(label="Beat Frequency Spectrum Analyzer", tag="fft_window", no_scrollbar=True) as fft_win:
-                    create_fft_widget(parent=fft_win, width=-1, height=-1)
+                _card("ppi_window", create_ppi_widget)
+                _card("fft_window", create_fft_widget)
 
-            # Kolom kanan: Osiloskop, Telemetri Target, dan Logo
             with dpg.group(tag="right_column"):
-                with dpg.child_window(label="Time-Domain Oscilloscope (CH0 & CH2)", tag="sinewave_window", no_scrollbar=True) as sinewave_win:
-                    create_sinewave_widget(parent=sinewave_win, width=-1, height=-1)
-                with dpg.child_window(label="Radar Target Telemetry & Detection", tag="metrics_window", no_scrollbar=True) as metrics_win:
-                    create_metrics_widget(parent=metrics_win, width=-1, height=-1)
-                with dpg.child_window(label="Institutional Affiliation", tag="logo_window", no_scrollbar=True) as logo_win:
-                    create_logo_widget(parent=logo_win, width=-1, height=-1)
+                _card("sinewave_window", create_sinewave_widget)
+                _card("metrics_window", create_metrics_widget)
+                _card("logo_window", create_logo_widget)
 
 
 # --- Titik Masuk Aplikasi --- #
 if __name__ == "__main__":
-    # 0. Pastikan motor servo selalu mulai dalam status STOPPED saat aplikasi pertama kali dibuka
+    # 0. Motor servo selalu mulai dalam status STOPPED saat aplikasi dibuka
     reset_servo_state_on_startup()
 
-    # 1. Inisialisasi Dear PyGui (viewport, tema taktis, font HD, handler)
+    # 1. Inisialisasi Dear PyGui (viewport, tema, font) dan setting tersimpan
     setup_dpg()
+    settings.load()
 
-    # 2. Buat layout UI utama
+    # 2. Buat layout UI utama, lalu terapkan settings & shortcut
     create_main_layout()
     dpg.set_primary_window("Primary Window", True)
+    ui_shell.init_shell()
 
     # Fullscreen & initial resize trigger
     dpg.toggle_viewport_fullscreen()
@@ -119,6 +67,7 @@ if __name__ == "__main__":
     # 4. Jalankan main render loop
     while dpg.is_dearpygui_running():
         update_ui_from_queues(queues)
+        ui_shell.tick()
         dpg.render_dearpygui_frame()
 
     # 5. Cleanup aman setelah aplikasi ditutup

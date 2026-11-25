@@ -6,7 +6,7 @@ including hardware parameters, file paths, and UI settings.
 
 import os
 from pathlib import Path
-from typing import Dict, List, Tuple, Any
+from typing import Dict, Tuple
 
 # --- Project Paths ---
 
@@ -18,22 +18,7 @@ PROJECT_ROOT: Path = Path(__file__).parent.absolute()
 C_DAQ_ENABLED: bool = True
 """Whether to initialize and run the embedded C DAQ engine via ctypes."""
 
-C_DAQ_WRITE_LIVE_BIN: bool = False
-"""Disabled: Streaming is direct in-memory without buffering to .bin file."""
-
-C_DAQ_BATCH_LOG_ENABLED: bool = False
-"""Disabled: No batch buffering to disk, data is streamed directly to UI."""
-
-C_DAQ_BATCH_MAX_EVENTS: int = 1000
-"""Number of events to accumulate before flushing batch log to disk (if enabled)."""
-
 # --- Data Acquisition Configuration ---
-
-FILENAME_BASE: str = "live/live_acquisition_ui.bin"
-"""Relative path to the live data file (fallback / legacy mode)."""
-
-FILENAME: str = str(PROJECT_ROOT / FILENAME_BASE)
-"""Absolute path to the live data file."""
 
 # Hardware Parameters (matching ADLink PCI-9846H & FMCW Specifications)
 SAMPLE_RATE: int = 20_000_000
@@ -103,15 +88,6 @@ FFT_IMPEDANCE_OHMS: float = 50.0
 
 FFT_MAGNITUDE_FLOOR_DBM: float = -120.0
 """Clamp FFT magnitude to this floor to suppress noise grass (dBm)."""
-FFT_MAGNITUDE_FLOOR_DB: float = -120.0
-"""Backward compatibility alias for FFT_MAGNITUDE_FLOOR_DBM."""
-
-# Worker Configuration
-POLLING_INTERVAL: float = 0.5
-"""File polling interval in seconds (deprecated, kept for compatibility)."""
-
-WORKER_REFRESH_INTERVAL: float = 0.05
-"""UI refresh interval in seconds (~20 FPS)."""
 
 # Target Detection Configuration
 TARGET_HISTORY_MAX_SIZE: int = 50
@@ -139,50 +115,54 @@ SERIAL_PORT: str = os.getenv("RADAR_SERIAL_PORT", os.getenv("SERVO_COM_PORT", DE
 BAUD_RATE: int = 115200
 """Serial baud rate for KYDAS4801A servo communication (115200 bps)."""
 
-SERIAL_TIMEOUT: float = 0.1
-"""Serial read timeout in seconds."""
-
-# KYDAS4801A Servo parameters (Calibrated: 0 deg = +140,000 counts [KIRI], 90 deg = +10,000 counts [TENGAH], 180 deg = -120,000 counts [KANAN])
-SERVO_CENTER_POSITION: int = 10_000     # 90 degrees (home / center)
-SERVO_HALF_SPAN: int = 130_000          # ~90 deg span (total 260,000 counts for 180 deg)
-SERVO_MIN_POSITION: int = -120_000      # 180 degrees (kanan)
-SERVO_MAX_POSITION: int = 140_000       # 0 degrees (kiri)
-SERVO_TARGET_0_DEG: int = 140_000       # 0 degrees (kiri)
-SERVO_TARGET_30_DEG: int = 96_667       # 30 degrees (batas kiri sektor)
-SERVO_TARGET_90_DEG: int = 10_000       # 90 degrees (center)
-SERVO_TARGET_150_DEG: int = -76_667     # 150 degrees (batas kanan sektor)
-SERVO_TARGET_180_DEG: int = -120_000    # 180 degrees (kanan)
-SERVO_SWEEP_MIN_DEG: float = 30.0       # Sector minimum angle (30 degrees - kiri)
-SERVO_SWEEP_MAX_DEG: float = 150.0      # Sector maximum angle (150 degrees - kanan)
-SERVO_POSITIVE_TARGET: int = 96_667     # 30 degrees (kiri)
-SERVO_NEGATIVE_TARGET: int = -76_667    # 150 degrees (kanan)
+# KYDAS4801A Servo parameters.
+# Titik tengah (90 deg) TIDAK di-hardcode: servo_controller mengambilnya dari posisi motor
+# saat aplikasi pertama kali terhubung. Semua target dihitung relatif terhadap titik itu.
+# Skala hasil kalibrasi percobaan: 130.000 counts per 60 deg. Arah: counts positif = kiri
+# (sudut mengecil), counts negatif = kanan. Nilai datasheet (encoder 2500 ppr x4, gearbox 80:1)
+# adalah 800_000 / 360 = 2222.22 counts/deg.
+SERVO_COUNTS_PER_DEG: float = 130_000 / 60.0   # ~2166.67 counts per derajat antena
 SERVO_POSITION_TOLERANCE: int = 150     # counts
 SERVO_POLL_INTERVAL: float = 0.08       # seconds (~12.5 Hz update rate)
-SERVO_START_DELAY: float = 2.0          # seconds to hold position on startup
-SERVO_MOVE_TIMEOUT: float = 120.0       # seconds timeout per sweep
 
 # --- UI Display Configuration ---
+
+FONT_PATH_UI: str = "C:/Windows/Fonts/segoeui.ttf"
+FONT_PATH_UI_BOLD: str = "C:/Windows/Fonts/segoeuib.ttf"
+FONT_PATH_MONO: str = "C:/Windows/Fonts/consola.ttf"
+
+"""System fonts used by the UI.
+
+Segoe UI has no glyph for box-drawing (U+2500..), arrows (U+2794) or emoji, and
+Consolas has no arrows/emoji: DPG renders those as '?'. Use plain ASCII
+('|', '->', '-') or the safe symbols U+25CF (●) / U+2022 (•) in UI text.
+"""
 
 APP_SPACING: int = 8
 """Spacing between UI elements in pixels."""
 
-APP_PADDING: int = 8
-"""Padding for UI elements in pixels."""
-
-# Color Theme - Tactical Dark Aerospace Radar Palette
+# Color Theme - calm dark palette. Each accent has ONE meaning:
+#   accent (mint)   -> CH0 signal, radar beam, primary/positive action
+#   accent_amber    -> CH2 signal
+#   accent_violet   -> UI selection/highlight (menus, sliders, active frames)
+#   danger (coral)  -> targets, STOP, error states
+#   success (green) -> RUNNING / healthy status
 THEME_COLORS: Dict[str, Tuple[int, int, int, int]] = {
-    "background": (11, 15, 23, 255),        # Deep Slate Navy
-    "card_bg": (18, 24, 37, 255),           # Card Container Dark
-    "card_border": (36, 48, 71, 230),       # Subtle Card Border
-    "scan_area": (14, 26, 38, 160),         # PPI Scan Sector
-    "grid_lines": (36, 52, 76, 140),        # PPI & Plot Grid Reticle
-    "text": (240, 246, 255, 255),           # Crisp Primary Text
-    "text_muted": (130, 145, 170, 255),     # Muted Slate Text
-    "accent": (0, 210, 255, 255),           # Cyber Tech Cyan
-    "accent_green": (0, 255, 157, 255),     # Radar Phosphor Green (Sweep)
-    "accent_amber": (255, 184, 0, 255),     # Signal Amber / CH2
-    "target": (255, 59, 48, 255),           # Tactical Target Crimson
-    "plot_bg": (9, 13, 20, 255),            # Oscilloscope Dark Screen
+    "background": (15, 18, 26, 255),        # App background
+    "card_bg": (22, 26, 36, 255),           # Card surface
+    "card_border": (38, 44, 58, 255),       # Hairline card border
+    "surface_hi": (32, 37, 50, 255),        # Raised controls (buttons, inputs)
+    "surface_hover": (42, 48, 64, 255),
+    "grid_lines": (120, 135, 165, 28),      # Plot grid / PPI reticle
+    "text": (226, 232, 240, 255),           # Primary text
+    "text_muted": (128, 138, 160, 255),     # Labels, axis text
+    "text_faint": (82, 92, 112, 255),       # Separators, hints
+    "accent": (94, 234, 212, 255),          # Mint
+    "accent_amber": (251, 191, 114, 255),   # Amber
+    "accent_violet": (139, 146, 240, 255),  # Violet
+    "success": (74, 222, 128, 255),
+    "danger": (248, 113, 113, 255),
+    "plot_bg": (18, 21, 30, 255),           # Plot area, slightly darker than card
 }
 """Color palette for the application theme.
 
@@ -193,9 +173,6 @@ Colors are in RGBA format (Red, Green, Blue, Alpha).
 
 RADAR_MAX_RANGE: float = 15.0
 """Maximum radar range in kilometers (15 km)."""
-
-RADAR_MIN_RANGE: float = 0.09
-"""Minimum radar range in kilometers (90 meters = 30 kHz beat frequency)."""
 
 RADAR_SWEEP_ANGLE_MIN: float = 30.0
 """Minimum sweep angle in degrees (30.0 deg sector limit)."""

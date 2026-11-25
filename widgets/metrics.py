@@ -1,78 +1,60 @@
-"""Metrics widget for displaying radar telemetry and target detection."""
+"""Target & telemetry card: one hero read-out (CH0 target range) plus two compact tables."""
 
 import dearpygui.dearpygui as dpg
 
+from app.fonts import FONT_DISPLAY, FONT_MONO, bind_last_item_font
+from config import FMCW_BEAT_MAX_KHZ, FMCW_BEAT_MIN_KHZ, RADAR_MAX_RANGE, THEME_COLORS
+from widgets.common import card_header
+
+_CHANNELS = (("ch1", "CH0", "accent"), ("ch2", "CH2", "accent_amber"))
+
+
+def _section_label(text: str) -> None:
+    dpg.add_text(text.upper(), color=THEME_COLORS["text_faint"])
+
+
+def _value_cell(tag: str) -> None:
+    dpg.add_text("—", tag=tag)
+    bind_last_item_font(FONT_MONO)
+
 
 def create_metrics_widget(parent: int | str, width: int, height: int) -> None:
-    """Create clean, functional telemetry and target detection tables."""
+    card_header(parent, "Targets", f"{FMCW_BEAT_MIN_KHZ:.0f} kHz - {FMCW_BEAT_MAX_KHZ / 1000:.0f} MHz"
+                f"  ·  max {RADAR_MAX_RANGE:.0f} km")
+
     with dpg.group(parent=parent):
-        # 1. Primary Channel Beat Frequency & Power
-        dpg.add_text("Channel Telemetry (Beat Frequency & Power):", color=(180, 200, 230))
-        with dpg.table(
-            header_row=True,
-            borders_innerH=True,
-            borders_outerH=True,
-            borders_innerV=True,
-            borders_outerV=True
-        ):
-            dpg.add_table_column(label="Channel")
-            dpg.add_table_column(label="Peak Freq (kHz)")
-            dpg.add_table_column(label="Peak Power (dBm)")
-
-            with dpg.table_row():
-                dpg.add_text("CH0 (RF Beat)", color=(0, 210, 255))
-                dpg.add_text("N/A", tag="ch1_peak_freq")
-                if dpg.does_item_exist("font_mono"):
-                    dpg.bind_item_font(dpg.last_item(), "font_mono")
-                dpg.add_text("N/A", tag="ch1_peak_mag")
-                if dpg.does_item_exist("font_mono"):
-                    dpg.bind_item_font(dpg.last_item(), "font_mono")
-
-            with dpg.table_row():
-                dpg.add_text("CH2 (Sync)", color=(255, 184, 0))
-                dpg.add_text("N/A", tag="ch2_peak_freq")
-                if dpg.does_item_exist("font_mono"):
-                    dpg.bind_item_font(dpg.last_item(), "font_mono")
-                dpg.add_text("N/A", tag="ch2_peak_mag")
-                if dpg.does_item_exist("font_mono"):
-                    dpg.bind_item_font(dpg.last_item(), "font_mono")
+        dpg.add_spacer(height=2)
+        # Hero read-out: nearest CH0 target range
+        with dpg.group(horizontal=True, horizontal_spacing=6):
+            dpg.add_text("—", tag="metric_range_big", color=THEME_COLORS["accent"])
+            bind_last_item_font(FONT_DISPLAY)
+            with dpg.group():
+                dpg.add_spacer(height=8)
+                dpg.add_text("km  ·  CH0 target range", color=THEME_COLORS["text_muted"])
 
         dpg.add_spacer(height=6)
+        _section_label("Detection")
+        with dpg.table(header_row=True, borders_innerH=True, borders_outerH=False,
+                       borders_innerV=False, borders_outerV=False,
+                       policy=dpg.mvTable_SizingStretchSame):
+            for label in ("Ch", "Beat kHz", "Range km", "Power dBm"):
+                dpg.add_table_column(label=label)
+            for prefix, name, color_key in _CHANNELS:
+                with dpg.table_row():
+                    dpg.add_text(name, color=THEME_COLORS[color_key])
+                    _value_cell(f"{prefix}_target_freq")
+                    _value_cell(f"{prefix}_target_range")
+                    _value_cell(f"{prefix}_target_mag")
 
-        # 2. Target Detection (30 kHz - 5 MHz • Max 15 km • Nyquist: 10 MHz)
-        dpg.add_text("Target Detection (30 kHz - 5 MHz • Max 15 km):", color=(255, 184, 0))
-        with dpg.table(
-            header_row=True,
-            borders_innerH=True,
-            borders_outerH=True,
-            borders_innerV=True,
-            borders_outerV=True
-        ):
-            dpg.add_table_column(label="Channel")
-            dpg.add_table_column(label="Beat Freq (kHz)")
-            dpg.add_table_column(label="Est. Range (km)")
-            dpg.add_table_column(label="Power (dBm)")
-
-            with dpg.table_row():
-                dpg.add_text("CH0", color=(0, 210, 255))
-                dpg.add_text("N/A", tag="ch1_target_freq")
-                if dpg.does_item_exist("font_mono"):
-                    dpg.bind_item_font(dpg.last_item(), "font_mono")
-                dpg.add_text("N/A", tag="ch1_target_range")
-                if dpg.does_item_exist("font_mono"):
-                    dpg.bind_item_font(dpg.last_item(), "font_mono")
-                dpg.add_text("N/A", tag="ch1_target_mag")
-                if dpg.does_item_exist("font_mono"):
-                    dpg.bind_item_font(dpg.last_item(), "font_mono")
-
-            with dpg.table_row():
-                dpg.add_text("CH2", color=(255, 184, 0))
-                dpg.add_text("N/A", tag="ch2_target_freq")
-                if dpg.does_item_exist("font_mono"):
-                    dpg.bind_item_font(dpg.last_item(), "font_mono")
-                dpg.add_text("N/A", tag="ch2_target_range")
-                if dpg.does_item_exist("font_mono"):
-                    dpg.bind_item_font(dpg.last_item(), "font_mono")
-                dpg.add_text("N/A", tag="ch2_target_mag")
-                if dpg.does_item_exist("font_mono"):
-                    dpg.bind_item_font(dpg.last_item(), "font_mono")
+        dpg.add_spacer(height=6)
+        _section_label("Spectrum peak")
+        with dpg.table(header_row=True, borders_innerH=True, borders_outerH=False,
+                       borders_innerV=False, borders_outerV=False,
+                       policy=dpg.mvTable_SizingStretchSame):
+            for label in ("Ch", "Peak kHz", "Peak dBm"):
+                dpg.add_table_column(label=label)
+            for prefix, name, color_key in _CHANNELS:
+                with dpg.table_row():
+                    dpg.add_text(name, color=THEME_COLORS[color_key])
+                    _value_cell(f"{prefix}_peak_freq")
+                    _value_cell(f"{prefix}_peak_mag")

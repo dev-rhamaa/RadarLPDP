@@ -7,24 +7,37 @@ data from worker threads, handling window resize events, and cleanup operations.
 import queue
 import time
 from collections import deque
-from typing import Any, Dict, List, Tuple
+from typing import Any, Dict, Tuple
 
 import dearpygui.dearpygui as dpg
 import numpy as np
 
+from app import settings
 from config import (
     APP_SPACING,
-    APP_PADDING,
-    THEME_COLORS,
     TARGET_HISTORY_MAX_SIZE,
-    TARGET_FREQ_THRESHOLD_KHZ,
     NYQUIST_FREQ_KHZ,
+    FMCW_RANGE_FACTOR_M_PER_KHZ,
 )
 from widgets.PPI import update_sweep_line, add_target_to_plot
 
 # Global UI state
 last_known_angle: float = 90.0
 target_history: deque = deque(maxlen=TARGET_HISTORY_MAX_SIZE)
+
+
+def set_target_history_size(size: int) -> None:
+    """Resize the PPI target trail, keeping the most recent targets."""
+    global target_history
+    size = max(1, int(size))
+    if target_history.maxlen != size:
+        target_history = deque(target_history, maxlen=size)
+        add_target_to_plot(list(target_history))
+
+
+def clear_targets() -> None:
+    target_history.clear()
+    add_target_to_plot([])
 
 # Header Telemetry tracking
 _frame_count: int = 0
@@ -97,18 +110,24 @@ _current_v_div_idx = 0
 
 def apply_scope_divs() -> None:
     """Apply current Time/Div and V/Div to the oscilloscope plot axes."""
-    global _current_time_div_idx, _current_v_div_idx
     if dpg.does_item_exist("sinewave_xaxis"):
         time_div_us = TIME_DIV_OPTIONS[_current_time_div_idx][1]
         request_axis_zoom("sinewave_xaxis", 0.0, float(10.0 * time_div_us))
     if dpg.does_item_exist("sinewave_yaxis"):
         v_div_counts = V_DIV_OPTIONS[_current_v_div_idx][1]
         v_max = float(4.0 * v_div_counts)
-        request_axis_zoom("sinewave_yaxis", -v_max, v_max, lock_after=True)
-    if dpg.does_item_exist("scope_time_div_combo"):
-        dpg.set_value("scope_time_div_combo", TIME_DIV_OPTIONS[_current_time_div_idx][0])
-    if dpg.does_item_exist("scope_v_div_combo"):
-        dpg.set_value("scope_v_div_combo", V_DIV_OPTIONS[_current_v_div_idx][0])
+        request_axis_zoom("sinewave_yaxis", -v_max, v_max, lock_after=bool(settings.get("scope.y_lock")))
+    # Sync menu check marks and the card read-out
+    for idx in range(len(TIME_DIV_OPTIONS)):
+        if dpg.does_item_exist(f"menu_tdiv_{idx}"):
+            dpg.set_value(f"menu_tdiv_{idx}", idx == _current_time_div_idx)
+    for idx in range(len(V_DIV_OPTIONS)):
+        if dpg.does_item_exist(f"menu_vdiv_{idx}"):
+            dpg.set_value(f"menu_vdiv_{idx}", idx == _current_v_div_idx)
+    if dpg.does_item_exist("scope_div_readout"):
+        t_lbl = TIME_DIV_OPTIONS[_current_time_div_idx][0].split(" (")[0]
+        v_lbl = V_DIV_OPTIONS[_current_v_div_idx][0].split(" (")[0]
+        dpg.set_value("scope_div_readout", f"{t_lbl}  ·  {v_lbl}")
 
 
 def set_scope_time_div(time_div_label: str) -> None:
@@ -131,44 +150,6 @@ def set_scope_v_div(v_div_label: str) -> None:
     apply_scope_divs()
 
 
-def step_scope_time_div(direction: int) -> None:
-    """Step Time/Div: direction > 0 to zoom in (smaller time/div), < 0 to zoom out."""
-    global _current_time_div_idx
-    new_idx = max(0, min(len(TIME_DIV_OPTIONS) - 1, _current_time_div_idx + direction))
-    _current_time_div_idx = new_idx
-    apply_scope_divs()
-
-
-def step_scope_v_div(direction: int) -> None:
-    """Step V/Div: direction > 0 to zoom in (smaller v/div), < 0 to zoom out."""
-    global _current_v_div_idx
-    new_idx = max(0, min(len(V_DIV_OPTIONS) - 1, _current_v_div_idx + direction))
-    _current_v_div_idx = new_idx
-    apply_scope_divs()
-
-
-def set_scope_timebase(span_us: float) -> None:
-    """Set oscilloscope horizontal timebase span (us), anchored from 0 us."""
-    if not dpg.does_item_exist("sinewave_xaxis"):
-        return
-    request_axis_zoom("sinewave_xaxis", 0.0, float(span_us))
-
-
-def zoom_scope_step(factor: float) -> None:
-    """Zoom in (factor < 1) or zoom out (factor > 1) horizontally on oscilloscope."""
-    if not dpg.does_item_exist("sinewave_xaxis"):
-        return
-    limits = dpg.get_axis_limits("sinewave_xaxis")
-    cur_span = max(limits[1] - limits[0], 1.0)
-    new_span = min(max(cur_span * factor, 1.0), 1000.0)
-    center = (limits[0] + limits[1]) / 2.0
-    new_min = max(0.0, center - new_span / 2.0)
-    new_max = min(1000.0, new_min + new_span)
-    if new_max - new_min < new_span and new_max >= 1000.0:
-        new_min = max(0.0, 1000.0 - new_span)
-    request_axis_zoom("sinewave_xaxis", new_min, new_max)
-
-
 def fit_scope_y() -> None:
     """Auto-fit oscilloscope vertical amplitude to current active signal peaks."""
     if not dpg.does_item_exist("sinewave_ch1_series") or not dpg.does_item_exist("sinewave_yaxis"):
@@ -180,25 +161,30 @@ def fit_scope_y() -> None:
         y_max = float(max(y_vals))
         span = max(abs(y_max - y_min), 100.0)
         margin = span * 0.15
-        request_axis_zoom("sinewave_yaxis", y_min - margin, y_max + margin, lock_after=True)
+        request_axis_zoom("sinewave_yaxis", y_min - margin, y_max + margin, lock_after=bool(settings.get("scope.y_lock")))
     else:
-        request_axis_zoom("sinewave_yaxis", -35000.0, 35000.0, lock_after=True)
+        request_axis_zoom("sinewave_yaxis", -35000.0, 35000.0, lock_after=bool(settings.get("scope.y_lock")))
+
+
+def _option_index(options, label: str, fallback: int = 0) -> int:
+    for idx, (lbl, _) in enumerate(options):
+        if lbl == label:
+            return idx
+    return fallback
 
 
 def reset_scope_view() -> None:
-    """Reset oscilloscope to standard 100 us/div (1 ms) and 250 mV/div (+/-1.0V)."""
+    """Reset oscilloscope to the Time/Div and V/Div saved in Settings."""
     global _current_time_div_idx, _current_v_div_idx
-    _current_time_div_idx = 0
-    _current_v_div_idx = 0
+    _current_time_div_idx = _option_index(TIME_DIV_OPTIONS, settings.get("scope.time_div"))
+    _current_v_div_idx = _option_index(V_DIV_OPTIONS, settings.get("scope.v_div"))
     apply_scope_divs()
 
 
-def toggle_scope_y_lock(sender, app_data) -> None:
-    """Toggle whether mouse wheel zooms X-only (locked Y) or both X and Y."""
-    if not dpg.does_item_exist("sinewave_yaxis"):
-        return
-    is_locked = bool(app_data)
-    dpg.configure_item("sinewave_yaxis", lock_min=is_locked, lock_max=is_locked)
+def set_scope_y_lock(is_locked: bool) -> None:
+    """Lock Y so the mouse wheel zooms time only (True) or both axes (False)."""
+    if dpg.does_item_exist("sinewave_yaxis"):
+        dpg.configure_item("sinewave_yaxis", lock_min=bool(is_locked), lock_max=bool(is_locked))
 
 
 def set_fft_span(span_khz: float) -> None:
@@ -233,23 +219,23 @@ def fit_fft_y() -> None:
         y_min = float(min(y_vals))
         y_max = float(max(y_vals))
         margin = max(abs(y_max - y_min) * 0.1, 5.0)
-        request_axis_zoom("fft_yaxis", max(y_min - margin, -130.0), min(y_max + margin, 15.0), lock_after=True)
+        request_axis_zoom("fft_yaxis", max(y_min - margin, -130.0), min(y_max + margin, 15.0), lock_after=bool(settings.get("fft.y_lock")))
     else:
-        request_axis_zoom("fft_yaxis", -110.0, 10.0, lock_after=True)
+        request_axis_zoom("fft_yaxis", -110.0, 10.0, lock_after=bool(settings.get("fft.y_lock")))
 
 
 def reset_fft_view() -> None:
-    """Reset FFT to full 10 MHz Nyquist span and -110 to +10 dBm."""
-    request_axis_zoom("fft_xaxis", 0.0, float(NYQUIST_FREQ_KHZ))
-    request_axis_zoom("fft_yaxis", -110.0, 10.0, lock_after=True)
+    """Reset FFT to the span and dBm range saved in Settings."""
+    span = min(float(settings.get("fft.span_khz")), float(NYQUIST_FREQ_KHZ))
+    request_axis_zoom("fft_xaxis", 0.0, span)
+    request_axis_zoom("fft_yaxis", float(settings.get("fft.y_min")), float(settings.get("fft.y_max")),
+                      lock_after=bool(settings.get("fft.y_lock")))
 
 
-def toggle_fft_y_lock(sender, app_data) -> None:
-    """Toggle whether mouse wheel zooms Frequency-only (locked dB) or both."""
-    if not dpg.does_item_exist("fft_yaxis"):
-        return
-    is_locked = bool(app_data)
-    dpg.configure_item("fft_yaxis", lock_min=is_locked, lock_max=is_locked)
+def set_fft_y_lock(is_locked: bool) -> None:
+    """Lock dBm so the mouse wheel zooms frequency only (True) or both axes (False)."""
+    if dpg.does_item_exist("fft_yaxis"):
+        dpg.configure_item("fft_yaxis", lock_min=bool(is_locked), lock_max=bool(is_locked))
 
 
 
@@ -259,7 +245,7 @@ def update_ui_from_queues(queues: Dict[str, queue.Queue]) -> None:
     Args:
         queues: Dictionary of queues for different data types
     """
-    global last_known_angle, target_history, _frame_count, _last_fps_calc, _current_fps
+    global last_known_angle, _frame_count, _last_fps_calc, _current_fps
     global _fft_initial_fitted, _sinewave_initial_fitted
 
     # 0. Live Top Header Telemetry (1 Hz update rate)
@@ -271,7 +257,7 @@ def update_ui_from_queues(queues: Dict[str, queue.Queue]) -> None:
         _last_fps_calc = now
 
         if dpg.does_item_exist("header_fps_count"):
-            dpg.set_value("header_fps_count", f"{_current_fps:.1f} FPS")
+            dpg.set_value("header_fps_count", f"{_current_fps:.0f} FPS")
 
         if dpg.does_item_exist("header_system_time"):
             dpg.set_value("header_system_time", time.strftime("%H:%M:%S"))
@@ -280,16 +266,7 @@ def update_ui_from_queues(queues: Dict[str, queue.Queue]) -> None:
             from app.setup import get_active_daq_engine
             engine = get_active_daq_engine()
             if engine and hasattr(engine, "event_count") and dpg.does_item_exist("header_event_count"):
-                dpg.set_value("header_event_count", f"{engine.event_count:,} EVT")
-        except Exception:
-            pass
-
-        try:
-            from app.servo_controller import is_servo_running
-            running = is_servo_running()
-            if dpg.does_item_exist("header_motor_status"):
-                dpg.set_value("header_motor_status", "RUNNING" if running else "STOPPED")
-                dpg.configure_item("header_motor_status", color=(0, 255, 157) if running else (255, 59, 48))
+                dpg.set_value("header_event_count", f"{engine.event_count:,} evt")
         except Exception:
             pass
 
@@ -345,8 +322,7 @@ def update_ui_from_queues(queues: Dict[str, queue.Queue]) -> None:
 
             # One-time initial fit on startup (Full Nyquist 10 MHz)
             if not _fft_initial_fitted and dpg.does_item_exist("fft_xaxis") and dpg.does_item_exist("fft_yaxis"):
-                request_axis_zoom("fft_xaxis", 0.0, float(NYQUIST_FREQ_KHZ))
-                request_axis_zoom("fft_yaxis", -110.0, 10.0, lock_after=True)
+                reset_fft_view()
                 _fft_initial_fitted = True
 
             # Update metrics widget
@@ -377,8 +353,7 @@ def update_ui_from_queues(queues: Dict[str, queue.Queue]) -> None:
             
             # One-time initial fit on startup
             if not _sinewave_initial_fitted and dpg.does_item_exist("sinewave_xaxis") and dpg.does_item_exist("sinewave_yaxis"):
-                request_axis_zoom("sinewave_xaxis", 0.0, 1000.0)
-                request_axis_zoom("sinewave_yaxis", -35000.0, 35000.0, lock_after=True)
+                reset_scope_view()
                 _sinewave_initial_fitted = True
     # Live cursor tracking for Frequency-to-Range conversion on hover
     if dpg.does_item_exist("fft_plot") and dpg.does_item_exist("fft_cursor_readout"):
@@ -387,12 +362,11 @@ def update_ui_from_queues(queues: Dict[str, queue.Queue]) -> None:
                 pos = dpg.get_plot_mouse_pos()
                 f_khz = float(pos[0])
                 if f_khz >= 0.0:
-                    r_m = f_khz * 3.0
-                    r_km = r_m / 1000.0
-                    if r_km < 1.0:
-                        dpg.set_value("fft_cursor_readout", f"{f_khz:,.1f} kHz ➔ {r_m:.0f} m")
+                    r_m = f_khz * FMCW_RANGE_FACTOR_M_PER_KHZ
+                    if r_m < 1000.0:
+                        dpg.set_value("fft_cursor_readout", f"{f_khz:,.1f} kHz  =  {r_m:.0f} m")
                     else:
-                        dpg.set_value("fft_cursor_readout", f"{f_khz:,.1f} kHz ➔ {r_km:.2f} km")
+                        dpg.set_value("fft_cursor_readout", f"{f_khz:,.1f} kHz  =  {r_m / 1000.0:.2f} km")
             except Exception:
                 pass
 
@@ -430,78 +404,73 @@ def _update_target_detection(channel_prefix: str, metrics: Dict[str, Any]) -> No
     target_freq = metrics.get('target_freq', 0.0)
     target_mag = metrics.get('target_mag', 0.0)
     
-    if dpg.does_item_exist(freq_tag):
-        if target_freq >= 30.0:
-            dpg.set_value(freq_tag, f"{target_freq:.1f}")
-        else:
-            dpg.set_value(freq_tag, "N/A")
+    has_target = target_freq >= 30.0
+    dist_km = (target_freq * FMCW_RANGE_FACTOR_M_PER_KHZ) / 1000.0
 
+    if dpg.does_item_exist(freq_tag):
+        dpg.set_value(freq_tag, f"{target_freq:.1f}" if has_target else "—")
     if dpg.does_item_exist(range_tag):
-        if target_freq >= 30.0:
-            # FMCW Range formula: R (km) = (f_beat (kHz) * 3.0 m) / 1000
-            dist_km = (target_freq * 3.0) / 1000.0
-            dpg.set_value(range_tag, f"{dist_km:.2f}")
-        else:
-            dpg.set_value(range_tag, "N/A")
-            
+        dpg.set_value(range_tag, f"{dist_km:.2f}" if has_target else "—")
     if dpg.does_item_exist(mag_tag):
-        if target_freq >= 30.0:
-            dpg.set_value(mag_tag, f"{target_mag:.2f}")
+        dpg.set_value(mag_tag, f"{target_mag:.2f}" if has_target else "—")
+    if channel_prefix == "ch1" and dpg.does_item_exist("metric_range_big"):
+        dpg.set_value("metric_range_big", f"{dist_km:.2f}" if has_target else "—")
+
+
+# Workspace layout: column -> [(panel window tag, share of flexible height, fixed px or 0)]
+LEFT_PANELS = [("ppi_window", 0.60, 0), ("fft_window", 0.40, 0)]
+RIGHT_PANELS = [("sinewave_window", 0.44, 0), ("metrics_window", 0.56, 0), ("logo_window", 0.0, 64)]
+MENU_BAR_HEIGHT = 30
+WINDOW_PADDING = 10  # matches mvStyleVar_WindowPadding in app/setup.py
+LEFT_COLUMN_SHARE = 0.66
+
+
+def _visible(panels):
+    return [p for p in panels if dpg.does_item_exist(p[0]) and dpg.is_item_shown(p[0])]
+
+
+def _layout_column(column_tag: str, panels, width: int, avail_h: int) -> None:
+    """Size the visible panels of one column. Fixed-height panels keep their size; the
+    flexible ones share what is left. The bottom panel uses height=-1 when flexible so the
+    column always ends exactly at the window edge."""
+    visible = _visible(panels)
+    dpg.configure_item(column_tag, show=bool(visible))
+    if not visible:
+        return
+    dpg.set_item_width(column_tag, max(width, 0))
+    fixed_total = sum(px for _, _, px in visible if px) + APP_SPACING * (len(visible) - 1)
+    flex = [p for p in visible if not p[2]]
+    share_total = sum(share for _, share, _ in flex) or 1.0
+    flex_h = max(avail_h - fixed_total, 0)
+    for tag, share, px in visible:
+        dpg.set_item_width(tag, max(width, 0))
+        if px:
+            dpg.set_item_height(tag, px)
+        elif tag == visible[-1][0]:
+            dpg.set_item_height(tag, -1)
         else:
-            dpg.set_value(mag_tag, "N/A")
+            dpg.set_item_height(tag, max(int(flex_h * share / share_total), 80))
 
 
 def resize_callback() -> None:
-    """Dynamically adjust layout when window is resized."""
-    if not dpg.is_dearpygui_running():
+    """Lay out the two workspace columns, skipping panels hidden via the View menu."""
+    if not dpg.is_dearpygui_running() or not dpg.does_item_exist("left_column"):
         return
 
-    viewport_width = dpg.get_viewport_client_width()
-    viewport_height = dpg.get_viewport_client_height()
+    content_w = dpg.get_viewport_client_width() - WINDOW_PADDING * 2
+    avail_h = dpg.get_viewport_client_height() - MENU_BAR_HEIGHT - WINDOW_PADDING * 2
 
-    # Calculate padding, spacing, and header bar height
-    padding = APP_PADDING * 2
-    spacing = APP_SPACING
-    header_height = 42 if dpg.does_item_exist("top_header_bar") else 0
+    left_on = bool(_visible(LEFT_PANELS))
+    right_on = bool(_visible(RIGHT_PANELS))
+    if left_on and right_on:
+        left_w = int(content_w * LEFT_COLUMN_SHARE)
+        right_w = content_w - left_w - APP_SPACING
+    else:
+        left_w = right_w = content_w
 
-    # Calculate column widths (adaptive if right_column doesn't exist)
-    left_exists = dpg.does_item_exist("left_column")
-    right_exists = dpg.does_item_exist("right_column")
+    _layout_column("left_column", LEFT_PANELS, left_w, avail_h)
+    _layout_column("right_column", RIGHT_PANELS, right_w, avail_h)
 
-    if left_exists and right_exists:
-        left_col_width = int(viewport_width * 0.68) - spacing
-        right_col_width = viewport_width - left_col_width - (spacing * 2) - 8
-        dpg.set_item_width("left_column", max(left_col_width, 0))
-        dpg.set_item_width("right_column", max(right_col_width, 0))
-    elif left_exists:
-        dpg.set_item_width("left_column", max(viewport_width - padding, 0))
-
-    # Available vertical space for workspace cards
-    available_height = viewport_height - header_height - padding - spacing - 4
-
-    # Calculate left column panel heights (PPI 58% / FFT 42%)
-    if dpg.does_item_exist("ppi_window") and not dpg.does_item_exist("fft_window"):
-        dpg.set_item_height("ppi_window", max(available_height, 0))
-    elif dpg.does_item_exist("ppi_window") and dpg.does_item_exist("fft_window"):
-        ppi_height = int(available_height * 0.58) - spacing
-        fft_height = available_height - ppi_height - spacing
-        dpg.set_item_height("ppi_window", max(ppi_height, 0))
-        dpg.set_item_height("fft_window", max(fft_height, 0))
-
-    # Calculate right column panel heights (3 functional widgets)
-    if right_exists:
-        logo_height = 80 if dpg.does_item_exist("logo_window") else 0
-        remaining_h = available_height - logo_height - (spacing * 2)
-        
-        sinewave_height = int(remaining_h * 0.52)
-        metrics_height = remaining_h - sinewave_height
-
-        if dpg.does_item_exist("sinewave_window"):
-            dpg.set_item_height("sinewave_window", max(sinewave_height, 0))
-        if dpg.does_item_exist("metrics_window"):
-            dpg.set_item_height("metrics_window", max(metrics_height, 0))
-        if dpg.does_item_exist("logo_window"):
-            dpg.set_item_height("logo_window", max(logo_height, 0))
 
 def cleanup_and_exit(
     stop_event: Any,
