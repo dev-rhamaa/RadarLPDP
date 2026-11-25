@@ -15,7 +15,6 @@ from config import FONT_PATH_MONO, FONT_PATH_UI, FONT_PATH_UI_BOLD
 
 FONT_DEFAULT = "font_default"  # Segoe UI 15, bound globally
 FONT_BOLD = "font_bold"        # Segoe UI Bold 16
-FONT_TITLE = "font_title"      # Segoe UI Bold 20
 FONT_MONO = "font_mono"        # Consolas 14, numeric readouts
 FONT_DISPLAY = "font_display"  # Segoe UI Bold 30, hero numbers
 
@@ -39,7 +38,6 @@ def setup_fonts() -> None:
         if _add_font(FONT_PATH_UI, 15, FONT_DEFAULT):
             dpg.bind_font(FONT_DEFAULT)
         if _add_font(FONT_PATH_UI_BOLD, 16, FONT_BOLD):
-            _add_font(FONT_PATH_UI_BOLD, 20, FONT_TITLE)
             _add_font(FONT_PATH_UI_BOLD, 30, FONT_DISPLAY)
         _add_font(FONT_PATH_MONO, 14, FONT_MONO)
 

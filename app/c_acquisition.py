@@ -13,23 +13,17 @@ Features:
 """
 
 import ctypes
-import os
 import sys
 import threading
 import time
-from datetime import datetime
 from pathlib import Path
-from typing import Callable, List, Optional, Tuple
+from typing import Callable, Optional, Tuple
 import numpy as np
 
 from config import (
     SAMPLE_RATE as DEFAULT_SAMPLE_RATE_HZ,
     BUFFER_SAMPLES as DEFAULT_BUFFER_SAMPLES,
-    FILENAME as DEFAULT_LIVE_FILENAME,
     C_DAQ_ENABLED as DEFAULT_C_DAQ_ENABLED,
-    C_DAQ_WRITE_LIVE_BIN as DEFAULT_WRITE_LIVE_BIN,
-    C_DAQ_BATCH_LOG_ENABLED as DEFAULT_BATCH_LOG_ENABLED,
-    C_DAQ_BATCH_MAX_EVENTS as DEFAULT_BATCH_MAX_EVENTS,
 )
 
 # Type definitions matching ADLink Wd-dask.h
@@ -49,7 +43,6 @@ CARD_NUM = 0
 SELECTED_CHANNELS = (0, 2)
 SAMPLE_RATE_HZ = DEFAULT_SAMPLE_RATE_HZ
 BUFFER_SAMPLES = DEFAULT_BUFFER_SAMPLES
-MAX_EVENT_BATCH = DEFAULT_BATCH_MAX_EVENTS
 
 # DAQ Operation, Mode & Trigger Constants
 WD_IntTimeBase = 0x3
@@ -200,12 +193,7 @@ class NativeCAcquisitionEngine:
         sample_rate_hz: int = DEFAULT_SAMPLE_RATE_HZ,
         buffer_samples: int = DEFAULT_BUFFER_SAMPLES,
         channels: Tuple[int, int] = SELECTED_CHANNELS,
-        log_folder: str = "log",
-        live_file: str = DEFAULT_LIVE_FILENAME,
         enabled: bool = DEFAULT_C_DAQ_ENABLED,
-        write_live_bin: bool = DEFAULT_WRITE_LIVE_BIN,
-        batch_log_enabled: bool = DEFAULT_BATCH_LOG_ENABLED,
-        batch_max_events: int = DEFAULT_BATCH_MAX_EVENTS,
         on_event_received: Optional[Callable[[np.ndarray, np.ndarray, int], None]] = None
     ):
         self.sample_rate_hz = sample_rate_hz
@@ -214,12 +202,7 @@ class NativeCAcquisitionEngine:
         self.channel_count = len(channels)
         self.samples_per_buffer = self.buffer_samples * self.channel_count
         self.event_size_bytes = self.samples_per_buffer * ctypes.sizeof(U16)
-        self.log_folder = log_folder
-        self.live_file = live_file
         self.enabled = enabled
-        self.write_live_bin = write_live_bin
-        self.batch_log_enabled = batch_log_enabled
-        self.batch_max_events = batch_max_events
         self.on_event_received = on_event_received
 
         self.driver = DaskDriver()
@@ -228,12 +211,7 @@ class NativeCAcquisitionEngine:
         self._thread: Optional[threading.Thread] = None
         self.status: str = "INITIALIZED"
         self.last_error: Optional[str] = None
-
-        # Batch logging state
-        self.batch_buffer: List[bytes] = []
         self.event_count: int = 0
-        if self.batch_log_enabled:
-            os.makedirs(self.log_folder, exist_ok=True)
 
     @property
     def is_running(self) -> bool:
@@ -313,61 +291,6 @@ class NativeCAcquisitionEngine:
                 print(f"[c_acquisition] Error saat release kartu: {e}")
             finally:
                 self.card_id = -1
-
-        # Flush any remaining batch logs on shutdown
-        if self.batch_log_enabled and self.batch_buffer:
-            self._save_batch_to_file()
-
-    def _save_live_event(self, raw_bytes: bytes) -> None:
-        """Save latest buffer to live .bin file atomically for analytics compatibility."""
-        try:
-            live_path = Path(self.live_file)
-            live_path.parent.mkdir(parents=True, exist_ok=True)
-            tmp_path = live_path.with_suffix(".tmp")
-
-            with open(tmp_path, "wb") as f:
-                f.write(raw_bytes)
-
-            tmp_path.replace(live_path)
-        except Exception:
-            pass
-
-    def _save_batch_to_file(self):
-        """Save accumulated event batch with metadata header matching cadgetdatanew.c."""
-        if not self.batch_buffer:
-            return
-
-        events_to_save = len(self.batch_buffer)
-        now = datetime.now()
-        timestamp_str = now.strftime("%Y%m%d_%H%M%S")
-        log_filepath = Path(self.log_folder) / f"batch_log_{timestamp_str}_{events_to_save:04d}_evt.bin"
-
-        header_lines = [
-            f"TEST_DATE:{now.strftime('%Y-%m-%d %H:%M:%S')}",
-            f"CODE_VERSION:{CODE_VERSION}",
-            f"AUTHOR:{AUTHOR_NAME}",
-            "CARD:PCI-9846H",
-            f"CHANNEL_COUNT:{self.channel_count}",
-            f"CHANNELS:CH{self.channels[0]},CH{self.channels[1]}",
-            f"SAMPLE_RATE:{self.sample_rate_hz}",
-            f"SAMPLES_PER_CHANNEL:{self.buffer_samples}",
-            f"EVENT_DATA_FORMAT:CH{self.channels[0]},CH{self.channels[1]}_INTERLEAVED",
-            f"EVENT_SIZE_BYTES:{self.event_size_bytes}",
-            f"BATCH_EVENT_COUNT:{events_to_save}",
-            "\n"
-        ]
-        header_bytes = "\n".join(header_lines).encode("utf-8")
-
-        try:
-            with open(log_filepath, "wb") as f_log:
-                f_log.write(header_bytes)
-                for raw_event in self.batch_buffer:
-                    f_log.write(raw_event)
-            print(f"[c_acquisition] Batch log ({events_to_save} events) disimpan ke {log_filepath}")
-        except Exception as e:
-            print(f"[c_acquisition] Gagal menulis batch log file: {e}")
-        finally:
-            self.batch_buffer.clear()
 
     def _run_acquisition_loop(self):
         """Worker thread executing the continuous DMA restart acquisition."""
@@ -489,17 +412,6 @@ class NativeCAcquisitionEngine:
                 if self.on_event_received:
                     self.on_event_received(ch1, ch2, self.sample_rate_hz)
 
-                # Mirror to live file only if explicitly enabled
-                if self.write_live_bin:
-                    self._save_live_event(bytes(source_buf))
-
-                # Append to batch logger only if explicitly enabled
-                if self.batch_log_enabled:
-                    raw_bytes = bytes(source_buf)
-                    self.batch_buffer.append(raw_bytes)
-                    if len(self.batch_buffer) >= self.batch_max_events:
-                        self._save_batch_to_file()
-
         except Exception as e:
             print(f"[c_acquisition] Exception dalam acquisition loop: {e}")
         finally:
@@ -507,29 +419,6 @@ class NativeCAcquisitionEngine:
 
 
 if __name__ == "__main__":
-    import argparse
-
-    parser = argparse.ArgumentParser(
-        description=f"PCI-9846H Radar Data Acquisition ({CODE_VERSION})"
-    )
-    parser.add_argument(
-        "--no-live",
-        action="store_true",
-        help="Disable atomic saving of live_acquisition_ui.bin"
-    )
-    parser.add_argument(
-        "--no-batch",
-        action="store_true",
-        help="Disable batch log accumulation to log/ folder"
-    )
-    parser.add_argument(
-        "--batch-size",
-        type=int,
-        default=MAX_EVENT_BATCH,
-        help=f"Events per batch log (default: {MAX_EVENT_BATCH})"
-    )
-    args = parser.parse_args()
-
     event_time_ms = (BUFFER_SAMPLES / SAMPLE_RATE_HZ) * 1000.0
 
     print("\n============================================================")
@@ -541,16 +430,10 @@ if __name__ == "__main__":
     print(f"Sample Rate  : {SAMPLE_RATE_HZ} Hz")
     print(f"Samples/Ch   : {BUFFER_SAMPLES}")
     print(f"Event Time   : {event_time_ms:.3f} ms")
-    print(f"Live File    : {DEFAULT_LIVE_FILENAME} ({'OFF' if args.no_live else 'ON'})")
-    print(f"Batch Size   : {args.batch_size} events ({'OFF' if args.no_batch else 'ON'})")
     print("============================================================\n")
     print("Tekan Ctrl+C kapan saja untuk menghentikan akuisisi.\n")
 
-    engine = NativeCAcquisitionEngine(
-        write_live_bin=not args.no_live,
-        batch_log_enabled=not args.no_batch,
-        batch_max_events=args.batch_size,
-    )
+    engine = NativeCAcquisitionEngine()
 
     if not engine.driver.is_available:
         print("[ERROR] Driver WD-Dask (wd-dask64.dll) tidak dapat dimuat!")
@@ -572,7 +455,6 @@ if __name__ == "__main__":
             if cur_evt > 0:
                 print(
                     f"[ACQ] Events: {cur_evt:,} | Rate: {delta:.1f} evt/s | "
-                    f"Batch: {len(engine.batch_buffer)}/{args.batch_size} | "
                     f"Elapsed: {int(elapsed)}s"
                 )
     except KeyboardInterrupt:

@@ -25,7 +25,6 @@ def _preload_textures() -> None:
 
     assets_dir = PROJECT_ROOT / "Assets"
     textures = [
-        ("logo_lpdp", assets_dir / "Logo_LPDP.png"),
         ("logo_dkst", assets_dir / "DKST_ITB.png"),
         ("logo_kirei", assets_dir / "KIREI.png"),
     ]

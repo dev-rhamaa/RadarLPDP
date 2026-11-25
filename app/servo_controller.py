@@ -22,10 +22,7 @@ from config import (
     PROJECT_ROOT,
     SERVO_CENTER_POSITION,
     SERVO_TARGET_30_DEG,
-    SERVO_TARGET_90_DEG,
     SERVO_TARGET_150_DEG,
-    SERVO_TARGET_0_DEG,
-    SERVO_TARGET_180_DEG,
     SERVO_POSITION_TOLERANCE,
     SERVO_POLL_INTERVAL,
     RADAR_SWEEP_ANGLE_MIN,
@@ -35,13 +32,8 @@ from config import (
 # --- Hardware Constants (KYDAS4801A) ---
 # Kalibrasi: 30 deg (Kiri) = +120,000 counts, 90 deg (Tengah) = -10,000 counts, 150 deg (Kanan) = -140,000 counts
 TARGET_30_DEG = SERVO_TARGET_30_DEG      # +120_000 counts (30 degrees - batas kiri sektor)
-TARGET_90_DEG = SERVO_CENTER_POSITION    # -10_000 counts (90 degrees home / tengah)
 TARGET_150_DEG = SERVO_TARGET_150_DEG    # -140_000 counts (150 degrees - batas kanan sektor)
-TARGET_0_DEG = SERVO_TARGET_0_DEG        # +185_000 counts (0 degrees - Kiri ekstrapolasi)
-TARGET_180_DEG = SERVO_TARGET_180_DEG    # -205_000 counts (180 degrees - Kanan ekstrapolasi)
-CENTER_POSITION = TARGET_90_DEG          # -10_000 counts
-MIN_POSITION = min(TARGET_0_DEG, TARGET_180_DEG)  # -205_000 counts
-MAX_POSITION = max(TARGET_0_DEG, TARGET_180_DEG)  # +185_000 counts
+CENTER_POSITION = SERVO_CENTER_POSITION  # -10_000 counts (90 degrees home / tengah)
 
 # Batas Sektor Radar (30 deg di Kiri sampai 150 deg di Kanan)
 SWEEP_MIN_DEG = RADAR_SWEEP_ANGLE_MIN    # 30.0 degrees (Kiri)

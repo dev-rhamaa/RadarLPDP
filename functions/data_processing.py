@@ -4,7 +4,6 @@ This module provides functions for loading, processing, and analyzing RF data
 from the ADC, including FFT computation, peak detection, and statistical analysis.
 """
 
-import math
 import queue
 import threading
 import time
@@ -18,8 +17,6 @@ from scipy.signal import find_peaks, get_window, savgol_filter
 from config import (
     SAMPLE_RATE,
     RADAR_MAX_RANGE,
-    RADAR_SWEEP_ANGLE_MIN,
-    RADAR_SWEEP_ANGLE_MAX,
     FFT_SMOOTHING_ENABLED,
     FFT_SMOOTHING_METHOD,
     FFT_SMOOTHING_WINDOW,
@@ -33,30 +30,6 @@ from config import (
     TARGET_MAG_THRESHOLD_DBM,
     FILTERED_EXTREMA_INDEX_THRESHOLD,
 )
-
-# --- Coordinate Conversion Functions ---
-
-def polar_to_cartesian(
-    center_x: float,
-    center_y: float,
-    angle_deg: float,
-    radius: float
-) -> Tuple[float, float]:
-    """Convert polar coordinates to Cartesian coordinates.
-    
-    Args:
-        center_x: X coordinate of the center point
-        center_y: Y coordinate of the center point
-        angle_deg: Angle in degrees
-        radius: Radius from center
-        
-    Returns:
-        Tuple of (x, y) Cartesian coordinates
-    """
-    angle_rad = math.radians(angle_deg)
-    x = center_x + radius * math.cos(angle_rad)
-    y = center_y + radius * math.sin(angle_rad)
-    return x, y
 
 # --- Signal Analysis Functions ---
 
@@ -296,30 +269,7 @@ def find_top_extrema(
         for i in peak_idx_sorted
     ]
 
-    # Find valleys by inverting the signal
-    inv_magnitudes = -magnitudes
-    valley_idx, _ = find_peaks(
-        inv_magnitudes,
-        prominence=prominence_db,
-        distance=distance_bins
-    )
-    
-    # Sort valleys by depth (lowest magnitude first)
-    valley_idx_sorted = sorted(
-        valley_idx,
-        key=lambda i: magnitudes[i]
-    )[:n_extrema]
-    
-    valleys = [
-        {
-            "index": int(i),
-            "freq_khz": float(frequencies[i]),
-            "mag_db": float(magnitudes[i])
-        }
-        for i in valley_idx_sorted
-    ]
-
-    return peaks, valleys
+    return peaks, []
 
 
 def find_target_extrema(
@@ -480,31 +430,7 @@ def find_filtered_extrema(
         for i in peak_idx_sorted
     ]
     
-    # Find valleys by inverting the signal
-    inv_magnitudes = -filtered_mags
-    valley_idx, _ = find_peaks(
-        inv_magnitudes,
-        prominence=prominence_db,
-        distance=distance_bins
-    )
-    
-    # Sort valleys by depth (lowest magnitude first)
-    valley_idx_sorted = sorted(
-        valley_idx,
-        key=lambda i: filtered_mags[i]
-    )[:n_extrema]
-    
-    # Build valley list with original indices
-    valleys = [
-        {
-            "index": int(i + index_threshold),
-            "freq_khz": float(filtered_freqs[i]),
-            "mag_db": float(filtered_mags[i])
-        }
-        for i in valley_idx_sorted
-    ]
-    
-    return peaks, valleys
+    return peaks, []
 
 # --- Signal Processing Helpers ---
 
@@ -566,22 +492,22 @@ def process_raw_channels(
         n_extrema=5
     )
 
-    # Extract top peaks and valleys with bin indices across full spectrum (up to Nyquist 10 MHz)
-    ch1_peaks, ch1_valleys = find_top_extrema(
+    # Extract top peaks with bin indices across full spectrum (up to Nyquist 10 MHz)
+    ch1_peaks, _ = find_top_extrema(
         freqs_ch1, mag_ch1,
         n_extrema=5,
         prominence_db=3.0,
         distance_bins=1
     )
-    ch2_peaks, ch2_valleys = find_top_extrema(
+    ch2_peaks, _ = find_top_extrema(
         freqs_ch2, mag_ch2,
         n_extrema=5,
         prominence_db=3.0,
         distance_bins=1
     )
     
-    # Extract filtered peaks and valleys (index 30 up to Nyquist index 10,000 @ 20 MS/s)
-    ch1_filtered_peaks, ch1_filtered_valleys = find_filtered_extrema(
+    # Extract filtered peaks (index 30 up to Nyquist index 10,000 @ 20 MS/s)
+    ch1_filtered_peaks, _ = find_filtered_extrema(
         freqs_ch1, mag_ch1,
         index_threshold=FILTERED_EXTREMA_INDEX_THRESHOLD,
         index_max=10_000,
@@ -589,7 +515,7 @@ def process_raw_channels(
         prominence_db=3.0,
         distance_bins=1
     )
-    ch2_filtered_peaks, ch2_filtered_valleys = find_filtered_extrema(
+    ch2_filtered_peaks, _ = find_filtered_extrema(
         freqs_ch2, mag_ch2,
         index_threshold=FILTERED_EXTREMA_INDEX_THRESHOLD,
         index_max=10_000,
@@ -614,9 +540,7 @@ def process_raw_channels(
                 "target_mag": target_mag_ch1,
                 "target_peaks": ch1_target_peaks,
                 "peaks": ch1_peaks,
-                "valleys": ch1_valleys,
                 "filtered_peaks": ch1_filtered_peaks,
-                "filtered_valleys": ch1_filtered_valleys
             },
             "ch2": {
                 "peak_freq": peak_freq_ch2,
@@ -625,9 +549,7 @@ def process_raw_channels(
                 "target_mag": target_mag_ch2,
                 "target_peaks": ch2_target_peaks,
                 "peaks": ch2_peaks,
-                "valleys": ch2_valleys,
                 "filtered_peaks": ch2_filtered_peaks,
-                "filtered_valleys": ch2_filtered_valleys
             }
         }
     }
@@ -706,28 +628,7 @@ def calculate_target_distance(
 
     return float(min(distance_km, max_range))
 
-def update_sweep_angle(
-    current_angle: float,
-    direction: int,
-    increment: float
-) -> Tuple[float, int]:
-    """Update sweep angle for 180-degree back-and-forth motion.
-    
-    Args:
-        current_angle: Current angle in degrees
-        direction: Direction of sweep (1 or -1)
-        increment: Angle increment per step
-        
-    Returns:
-        Tuple of (new_angle, new_direction)
-    """
-    new_angle = current_angle + increment * direction
-    
-    if not (RADAR_SWEEP_ANGLE_MIN <= new_angle <= RADAR_SWEEP_ANGLE_MAX):
-        direction *= -1
-        new_angle = np.clip(new_angle, RADAR_SWEEP_ANGLE_MIN, RADAR_SWEEP_ANGLE_MAX)
-        
-    return new_angle, direction
+
 
 # --- Worker Thread Functions --- #
 

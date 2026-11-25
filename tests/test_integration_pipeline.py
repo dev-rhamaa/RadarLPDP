@@ -6,8 +6,8 @@ import pytest
 from functions.data_processing import (
     process_raw_channels,
     calculate_target_distance,
-    polar_to_cartesian,
 )
+from widgets.PPI import _polar
 
 
 @pytest.mark.integration
@@ -41,20 +41,17 @@ class TestIntegrationPipeline:
         assert abs(peak_freq - 3500.0) <= 5.0
 
         # 4. Inject verified target peak into metrics to test distance calculation
-        # With index_min=2500, index_max=4500, max_range=15.0:
-        # Expected distance = ((3500 - 2500) / (4500 - 2500)) * 15.0 = (1000 / 2000) * 15.0 = 7.5 m
+        # 2500 kHz * 3.0 m / kHz = 7500 m = 7.5 km
         metrics_with_peak = {
             "ch1": {
                 "filtered_peaks": [
-                    {"index": 3500, "freq_khz": 3500.0, "mag_db": -10.0}
+                    {"index": 2500, "freq_khz": 2500.0, "mag_db": -10.0}
                 ]
             }
         }
         distance = calculate_target_distance(
             metrics_with_peak,
             mag_threshold_db=-50.0,
-            index_min=2500,
-            index_max=4500,
             max_range=15.0
         )
 
@@ -63,8 +60,8 @@ class TestIntegrationPipeline:
 
         # 5. Verify polar to Cartesian mapping for PPI radar plotting
         angle_deg = 60.0
-        x_target, y_target = polar_to_cartesian(0.0, 0.0, angle_deg, distance)
-        expected_x = distance * np.cos(np.radians(angle_deg))
-        expected_y = distance * np.sin(np.radians(angle_deg))
+        x_target, y_target = _polar(angle_deg, distance)
+        expected_x = distance * np.cos(np.radians(180.0 - angle_deg))
+        expected_y = distance * np.sin(np.radians(180.0 - angle_deg))
         assert pytest.approx(x_target, rel=1e-3) == expected_x
         assert pytest.approx(y_target, rel=1e-3) == expected_y

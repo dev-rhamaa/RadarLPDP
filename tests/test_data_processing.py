@@ -5,7 +5,6 @@ import numpy as np
 import pytest
 
 from functions.data_processing import (
-    polar_to_cartesian,
     smooth_spectrum,
     compute_fft,
     compute_fft_linear,
@@ -15,7 +14,6 @@ from functions.data_processing import (
     find_filtered_extrema,
     process_raw_channels,
     calculate_target_distance,
-    update_sweep_angle,
 )
 
 
@@ -23,26 +21,6 @@ from functions.data_processing import (
 @pytest.mark.signal
 class TestDataProcessing:
     """Test suite for radar signal analysis and mathematical routines."""
-
-    def test_polar_to_cartesian_cardinal_angles(self):
-        """Verify polar to Cartesian conversion at 0, 90, 180, and 270 degrees."""
-        cx, cy = 10.0, 20.0
-        r = 5.0
-
-        # 0 degrees: (cx + r, cy)
-        x0, y0 = polar_to_cartesian(cx, cy, 0.0, r)
-        assert pytest.approx(x0, rel=1e-5) == 15.0
-        assert pytest.approx(y0, rel=1e-5) == 20.0
-
-        # 90 degrees: (cx, cy + r)
-        x90, y90 = polar_to_cartesian(cx, cy, 90.0, r)
-        assert pytest.approx(x90, abs=1e-5) == 10.0
-        assert pytest.approx(y90, rel=1e-5) == 25.0
-
-        # 180 degrees: (cx - r, cy)
-        x180, y180 = polar_to_cartesian(cx, cy, 180.0, r)
-        assert pytest.approx(x180, rel=1e-5) == 5.0
-        assert pytest.approx(y180, abs=1e-5) == 20.0
 
     def test_smooth_spectrum_empty(self):
         """Verify smooth_spectrum gracefully handles empty array."""
@@ -116,15 +94,15 @@ class TestDataProcessing:
         assert peaks[1]["mag_db"] == -30.0
 
     def test_find_target_extrema(self):
-        """Verify find_target_extrema filters signals strictly above target threshold."""
-        freqs = np.array([5000.0, 8000.0, 12000.0, 15000.0])
-        mags = np.array([-10.0, -15.0, -30.0, -25.0])
+        """Verify find_target_extrema filters signals strictly within target beat passband [30, 5000] kHz."""
+        freqs = np.array([10.0, 500.0, 2500.0, 8000.0])
+        mags = np.array([-10.0, -15.0, -5.0, -25.0])
 
-        # Threshold 10,000 kHz: only 12000 and 15000 qualify
-        peaks, top_freq, top_mag = find_target_extrema(freqs, mags, freq_threshold_khz=10_000.0)
-        assert top_freq == 15000.0
-        assert top_mag == -25.0
-        assert all(p["freq_khz"] >= 10000.0 for p in peaks)
+        # Beat passband [30, 5000] kHz: 500.0 and 2500.0 qualify
+        peaks, top_freq, top_mag = find_target_extrema(freqs, mags, freq_min_khz=30.0, freq_max_khz=5000.0)
+        assert top_freq == 2500.0
+        assert top_mag == -5.0
+        assert all(30.0 <= p["freq_khz"] <= 5000.0 for p in peaks)
 
     def test_find_filtered_extrema(self):
         """Verify index-threshold filtering for high-frequency FFT bins."""
@@ -138,25 +116,19 @@ class TestDataProcessing:
         assert peaks[0]["index"] == 3000
 
     def test_calculate_target_distance(self):
-        """Verify beat frequency mapping to radar target distance."""
-        # Simulated metrics dictionary
+        """Verify beat frequency mapping to radar target distance (3.0 m / kHz)."""
         metrics = {
             "ch1": {
                 "filtered_peaks": [
-                    {"index": 3298, "freq_khz": 3298.0, "mag_db": 85.0}
+                    {"index": 2500, "freq_khz": 2500.0, "mag_db": -10.0}
                 ],
                 "peaks": []
             }
         }
-
-        # index_min=2500, index_max=4096, max_range=15.0
-        # normalized = (3298 - 2500) / (4096 - 2500) = 798 / 1596 = 0.50
-        # distance = 0.5 * 15.0 = 7.5 m
+        # 2500 kHz * 3.0 m/kHz = 7500 m = 7.5 km
         dist = calculate_target_distance(
             metrics, 
-            mag_threshold_db=80.0, 
-            index_min=2500, 
-            index_max=4096, 
+            mag_threshold_db=-50.0, 
             max_range=15.0
         )
         assert dist is not None
@@ -167,24 +139,12 @@ class TestDataProcessing:
         metrics = {
             "ch1": {
                 "filtered_peaks": [
-                    {"index": 3000, "freq_khz": 3000.0, "mag_db": 65.0}  # Below 80 dB threshold
+                    {"index": 2000, "freq_khz": 2000.0, "mag_db": -90.0}  # Below -80 dBm threshold
                 ]
             }
         }
-        dist = calculate_target_distance(metrics, mag_threshold_db=80.0)
+        dist = calculate_target_distance(metrics, mag_threshold_db=-80.0)
         assert dist is None
-
-    def test_update_sweep_angle_bounce(self):
-        """Verify 180-degree sweep ping-pong angle dynamics."""
-        # Move forward from 178° + 3° -> bounces at 180° and reverses direction to -1
-        new_ang, new_dir = update_sweep_angle(current_angle=178.0, direction=1, increment=3.0)
-        assert new_ang == 180.0
-        assert new_dir == -1
-
-        # Move backward from 2° - 3° -> bounces at 0° and reverses direction to +1
-        new_ang, new_dir = update_sweep_angle(current_angle=2.0, direction=-1, increment=3.0)
-        assert new_ang == 0.0
-        assert new_dir == 1
 
     def test_smooth_spectrum_edge_cases(self):
         """Verify smooth_spectrum edge cases: very short array, window <= polyorder."""
@@ -217,37 +177,32 @@ class TestDataProcessing:
         """Verify target distance calculation under ch1 and ch2 modes."""
         metrics = {
             "ch1": {
-                "filtered_peaks": [{"index": 2800, "freq_khz": 2800.0, "mag_db": 90.0}]
+                "filtered_peaks": [{"index": 2000, "freq_khz": 2000.0, "mag_db": -10.0}]
             },
             "ch2": {
-                "filtered_peaks": [{"index": 3500, "freq_khz": 3500.0, "mag_db": 95.0}]
+                "filtered_peaks": [{"index": 3000, "freq_khz": 3000.0, "mag_db": -5.0}]
             }
         }
-        # Under ch1 mode, selects 2800 index
+        # Under ch1 mode: 2000 kHz * 3.0 m/kHz = 6.0 km
         dist_ch1 = calculate_target_distance(
-            metrics, mag_threshold_db=80.0, index_min=2000, index_max=4000, 
+            metrics, mag_threshold_db=-50.0,
             channel_mode="ch1", max_range=15.0
         )
         assert dist_ch1 is not None
-        # (2800 - 2000) / 2000 * 15 = 0.4 * 15 = 6.0
         assert pytest.approx(dist_ch1, abs=0.05) == 6.0
 
-        # Under ch2 mode, selects 3500 index
+        # Under ch2 mode: 3000 kHz * 3.0 m/kHz = 9.0 km
         dist_ch2 = calculate_target_distance(
-            metrics, mag_threshold_db=80.0, index_min=2000, index_max=4000, 
+            metrics, mag_threshold_db=-50.0,
             channel_mode="ch2", max_range=15.0
         )
         assert dist_ch2 is not None
-        # (3500 - 2000) / 2000 * 15 = 0.75 * 15 = 11.25
-        assert pytest.approx(dist_ch2, abs=0.05) == 11.25
+        assert pytest.approx(dist_ch2, abs=0.05) == 9.0
 
-    def test_calculate_target_distance_invalid_indices(self):
-        """Verify calculate_target_distance handles invalid index boundaries."""
-        metrics = {"ch1": {"peaks": [{"index": 100, "mag_db": 100.0}]}}
-        # index_max <= index_min
-        assert calculate_target_distance(metrics, index_min=500, index_max=400) is None
-        # None metrics
+    def test_calculate_target_distance_empty_or_none(self):
+        """Verify calculate_target_distance handles empty or None metrics."""
         assert calculate_target_distance(None) is None
+        assert calculate_target_distance({}) is None
 
     def test_process_raw_channels_empty(self, sample_rate):
         """Verify process_raw_channels returns (None, None) for empty inputs."""

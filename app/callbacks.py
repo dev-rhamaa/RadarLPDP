@@ -150,22 +150,6 @@ def set_scope_v_div(v_div_label: str) -> None:
     apply_scope_divs()
 
 
-def step_scope_time_div(direction: int) -> None:
-    """Step Time/Div: direction > 0 to zoom in (smaller time/div), < 0 to zoom out."""
-    global _current_time_div_idx
-    new_idx = max(0, min(len(TIME_DIV_OPTIONS) - 1, _current_time_div_idx + direction))
-    _current_time_div_idx = new_idx
-    apply_scope_divs()
-
-
-def step_scope_v_div(direction: int) -> None:
-    """Step V/Div: direction > 0 to zoom in (smaller v/div), < 0 to zoom out."""
-    global _current_v_div_idx
-    new_idx = max(0, min(len(V_DIV_OPTIONS) - 1, _current_v_div_idx + direction))
-    _current_v_div_idx = new_idx
-    apply_scope_divs()
-
-
 def fit_scope_y() -> None:
     """Auto-fit oscilloscope vertical amplitude to current active signal peaks."""
     if not dpg.does_item_exist("sinewave_ch1_series") or not dpg.does_item_exist("sinewave_yaxis"):

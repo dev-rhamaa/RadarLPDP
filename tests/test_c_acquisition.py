@@ -25,8 +25,6 @@ class TestCAcquisition:
             sample_rate_hz=20_000_000,
             buffer_samples=20_000,
             channels=(0, 2),
-            write_live_bin=False,
-            batch_log_enabled=False,
             on_event_received=callback_mock
         )
 
@@ -66,7 +64,7 @@ class TestCAcquisition:
 
     def test_acquisition_loop_records_hardware_not_found(self):
         """Verify background worker marks status as HARDWARE_NOT_FOUND when card is missing."""
-        engine = NativeCAcquisitionEngine(write_live_bin=False, batch_log_enabled=False)
+        engine = NativeCAcquisitionEngine()
         # Start normal background worker
         engine.start(raise_if_no_hardware=False)
         # Wait briefly for thread to attempt registration and enter standby
@@ -80,7 +78,7 @@ class TestCAcquisition:
 
     def test_engine_start_stop_simulation_fallback(self):
         """Verify engine start and stop behavior with mock driver in software fallback."""
-        engine = NativeCAcquisitionEngine(write_live_bin=False, batch_log_enabled=False)
+        engine = NativeCAcquisitionEngine()
         engine.driver.is_available = False
 
         engine.start()

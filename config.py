@@ -18,22 +18,7 @@ PROJECT_ROOT: Path = Path(__file__).parent.absolute()
 C_DAQ_ENABLED: bool = True
 """Whether to initialize and run the embedded C DAQ engine via ctypes."""
 
-C_DAQ_WRITE_LIVE_BIN: bool = False
-"""Disabled: Streaming is direct in-memory without buffering to .bin file."""
-
-C_DAQ_BATCH_LOG_ENABLED: bool = False
-"""Disabled: No batch buffering to disk, data is streamed directly to UI."""
-
-C_DAQ_BATCH_MAX_EVENTS: int = 1000
-"""Number of events to accumulate before flushing batch log to disk (if enabled)."""
-
 # --- Data Acquisition Configuration ---
-
-FILENAME_BASE: str = "live/live_acquisition_ui.bin"
-"""Relative path to the live data file (fallback / legacy mode)."""
-
-FILENAME: str = str(PROJECT_ROOT / FILENAME_BASE)
-"""Absolute path to the live data file."""
 
 # Hardware Parameters (matching ADLink PCI-9846H & FMCW Specifications)
 SAMPLE_RATE: int = 20_000_000
@@ -133,10 +118,7 @@ BAUD_RATE: int = 115200
 # KYDAS4801A Servo parameters (Calibrated: 30 deg = +120,000 counts [KIRI], 90 deg = -10,000 counts [TENGAH], 150 deg = -140,000 counts [KANAN])
 SERVO_CENTER_POSITION: int = -10_000    # 90 degrees (home / center)
 SERVO_TARGET_30_DEG: int = 120_000      # 30 degrees (batas kiri sektor)
-SERVO_TARGET_90_DEG: int = -10_000      # 90 degrees (center)
 SERVO_TARGET_150_DEG: int = -140_000    # 150 degrees (batas kanan sektor)
-SERVO_TARGET_0_DEG: int = 185_000       # 0 degrees (kiri - ekstrapolasi)
-SERVO_TARGET_180_DEG: int = -205_000    # 180 degrees (kanan - ekstrapolasi)
 SERVO_POSITION_TOLERANCE: int = 150     # counts
 SERVO_POLL_INTERVAL: float = 0.08       # seconds (~12.5 Hz update rate)
 
@@ -155,9 +137,6 @@ Consolas has no arrows/emoji: DPG renders those as '?'. Use plain ASCII
 
 APP_SPACING: int = 8
 """Spacing between UI elements in pixels."""
-
-APP_PADDING: int = 8
-"""Padding for UI elements in pixels."""
 
 # Color Theme - calm dark palette. Each accent has ONE meaning:
 #   accent (mint)   -> CH0 signal, radar beam, primary/positive action
@@ -181,9 +160,6 @@ THEME_COLORS: Dict[str, Tuple[int, int, int, int]] = {
     "success": (74, 222, 128, 255),
     "danger": (248, 113, 113, 255),
     "plot_bg": (18, 21, 30, 255),           # Plot area, slightly darker than card
-    # Backwards-compatible aliases
-    "accent_green": (74, 222, 128, 255),
-    "target": (248, 113, 113, 255),
 }
 """Color palette for the application theme.
 

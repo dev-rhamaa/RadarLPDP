@@ -40,14 +40,14 @@ class TestConfig:
     def test_target_detection_parameters(self):
         """Verify target detection constants."""
         assert config.TARGET_HISTORY_MAX_SIZE == 50
-        assert config.TARGET_FREQ_THRESHOLD_KHZ == 10_000.0
-        assert config.FILTERED_EXTREMA_INDEX_THRESHOLD == 2000
+        assert config.TARGET_FREQ_THRESHOLD_KHZ == 30.0
+        assert config.FILTERED_EXTREMA_INDEX_THRESHOLD == 30
 
     def test_theme_colors(self):
         """Verify theme color dictionary contains standard RGBA keys."""
         required_keys = [
-            "background", "card_bg", "grid_lines", "text", 
-            "accent", "accent_green", "accent_amber", "target", "plot_bg"
+            "background", "card_bg", "grid_lines", "text",
+            "accent", "accent_amber", "danger", "success", "plot_bg"
         ]
         for key in required_keys:
             assert key in config.THEME_COLORS
