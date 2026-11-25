@@ -2,8 +2,10 @@
 """Mini app centering motor servo KYDAS4801A.
 
 Dua tombol (KIRI / KANAN) untuk menggeser motor sedikit demi sedikit sampai antena
-menghadap tengah (90 deg). Setelah pas, tekan "Tandai TENGAH" lalu salin angka counts
-yang tampil ke ``SERVO_CENTER_POSITION`` di ``config.py``.
+menghadap tengah (90 deg). Setelah pas, tutup tool ini lalu jalankan ``main.py``:
+radar otomatis memakai posisi motor saat itu sebagai titik tengah (tidak ada nilai tengah
+yang perlu disalin ke ``config.py``). "Tandai TENGAH" hanya memindahkan jendela batas
+1 putaran di tool ini ke posisi sekarang.
 
 Batas gerak: total 1 putaran antena = 800.000 counts (+-400.000 dari titik tengah).
 
@@ -144,8 +146,7 @@ def _worker_loop(port: str, stop_event: threading.Event) -> None:
                             target=snap["position"],
                             msg=f"TENGAH ditandai: {snap['position']} counts.",
                         )
-                        print(f"[centering] TENGAH (90 deg) = {snap['position']} counts "
-                              f"-> isi ke SERVO_CENTER_POSITION di config.py")
+                        print(f"[centering] TENGAH (90 deg) = {snap['position']} counts")
                     elif cmd[0] == "disable":
                         disable_servo(ser)
                         _set(msg="Motor di-DISABLE (dilepas). Klik KIRI/KANAN untuk aktif lagi.")

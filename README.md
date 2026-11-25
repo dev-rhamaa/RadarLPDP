@@ -139,9 +139,19 @@ counts per 1 derajat      = 800.000 / 360    = 2.222,22
 
 Kalibrasi lama (hasil percobaan) memakai 130.000 counts per 60 deg = 2.166,67 counts/deg, setara rasio efektif sekitar 78:1, selisih 2,5% dari datasheet. Akibatnya, perintah 60 deg dari tengah (130.000 counts) secara teori hanya menggerakkan antena sekitar 58,5 deg. Dengan angka datasheet, +-60 deg = +-133.333 counts.
 
-Titik tengah `SERVO_CENTER_POSITION = -10_000` bukan dari datasheet, melainkan offset hasil percobaan. Ukur ulang setiap kali antena atau coupling dipasang ulang.
+Skala yang dipakai aplikasi saat ini masih hasil percobaan: `SERVO_COUNTS_PER_DEG = 130_000 / 60` di `config.py` (perilaku sama seperti sebelumnya). Nilai datasheet (2.222,22) belum dipakai; verifikasi dulu dengan pengukuran langsung (baca `ED 08` sebelum dan sesudah memutar antena sejauh sudut yang diketahui), lalu ganti satu konstanta itu.
 
-`config.py` dan `app/servo_controller.py` **belum diubah**. Nilai di atas baru acuan; verifikasi dengan pengukuran langsung (baca `ED 08` sebelum dan sesudah memutar antena sejauh sudut yang diketahui) sebelum dipakai menggantikan kalibrasi lama.
+### Titik tengah tidak lagi di-hardcode
+
+`SERVO_CENTER_POSITION`, `SERVO_TARGET_30_DEG`, dan `SERVO_TARGET_150_DEG` sudah dihapus dari `config.py`. Alurnya sekarang:
+
+1.  Saat `main.py` pertama kali terhubung ke driver, posisi motor saat itu (`ED 08`) dibaca dan dijadikan **titik tengah = 90 deg**. Nilai counter absolut tidak penting (counter encoder incremental selalu mulai dari 0 saat driver dinyalakan).
+2.  Semua target dihitung relatif terhadap titik itu: `counts = tengah + (90 - derajat) x SERVO_COUNTS_PER_DEG` (counts positif = kiri, negatif = kanan). Sapuan tetap 30 sampai 150 deg, bolak-balik.
+3.  Saat motor di-STOP atau aplikasi ditutup, motor kembali ke titik tengah itu, sehingga motor selalu parkir di 90 deg.
+4.  Titik tengah tidak diambil ulang kalau koneksi serial terputus lalu tersambung lagi dalam satu sesi, supaya tidak bergeser ke tengah sapuan.
+5.  `servo_state.json` tidak lagi menyimpan counts, hanya `running`, `mode`, dan `target_deg`.
+
+**Syarat**: antena harus berada di 90 deg ketika aplikasi dibuka (dan driver dinyalakan). Kalau tidak, seluruh sektor ikut bergeser. Gunakan `centering_tool.py` untuk mengatur posisi antena sebelum menjalankan `main.py`.
 
 ## Tool Centering Motor (`centering_tool.py`)
 
@@ -155,6 +165,6 @@ python centering_tool.py
 -   Isi port, klik **Hubungkan**. Posisi saat itu dijadikan acuan jendela gerak.
 -   **<< KIRI** / **KANAN >>** menggeser motor sebesar langkah terpilih (0,1 / 0,5 / 1 / 5 deg per klik, dikonversi dengan 2.222,22 counts/deg).
 -   **Batas gerak: 1 putaran = 800.000 counts** (+-400.000 dari titik tengah). Klik di luar batas ditolak dan ditampilkan pesan.
--   **Tandai TENGAH (90 deg)** menyimpan posisi riil sekarang sebagai titik tengah, memindahkan jendela 800.000 counts ke situ, dan mencetak nilainya di terminal. Salin angka itu ke `SERVO_CENTER_POSITION` di `config.py`.
+-   **Tandai TENGAH (90 deg)** memindahkan jendela batas 800.000 counts di tool ini ke posisi riil sekarang dan mencetak nilainya di terminal. Tidak ada angka yang perlu disalin ke `config.py`: setelah antena pas di 90 deg, tutup tool ini dan jalankan `main.py`, yang otomatis memakai posisi motor saat itu sebagai titik tengah.
 -   **DISABLE motor** melepas motor (perintah `E0 00 ...`). Klik KIRI/KANAN untuk mengaktifkan lagi.
 -   Tool ini tidak mengubah `config.py` atau `servo_state.json` secara otomatis.
