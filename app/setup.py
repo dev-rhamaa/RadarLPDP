@@ -120,7 +120,6 @@ def _create_global_theme() -> None:
             dpg.add_theme_color(dpg.mvPlotCol_PlotBorder, (0, 0, 0, 0), category=dpg.mvThemeCat_Plots)
             dpg.add_theme_color(dpg.mvPlotCol_AxisGrid, c["grid_lines"], category=dpg.mvThemeCat_Plots)
             dpg.add_theme_color(dpg.mvPlotCol_AxisText, c["text_muted"], category=dpg.mvThemeCat_Plots)
-            dpg.add_theme_color(dpg.mvPlotCol_AxisTick, (0, 0, 0, 0), category=dpg.mvThemeCat_Plots)
             dpg.add_theme_color(dpg.mvPlotCol_LegendBg, (22, 26, 36, 200), category=dpg.mvThemeCat_Plots)
             dpg.add_theme_color(dpg.mvPlotCol_LegendBorder, (0, 0, 0, 0), category=dpg.mvThemeCat_Plots)
             dpg.add_theme_color(dpg.mvPlotCol_LegendText, c["text_muted"], category=dpg.mvThemeCat_Plots)

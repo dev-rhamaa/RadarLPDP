@@ -24,8 +24,8 @@ class TestConfig:
     def test_radar_sweep_and_range_limits(self):
         """Verify radar physical range and sweep angle constants."""
         assert config.RADAR_MAX_RANGE == 15.0
-        assert config.RADAR_SWEEP_ANGLE_MIN == 0.0
-        assert config.RADAR_SWEEP_ANGLE_MAX == 180.0
+        assert config.RADAR_SWEEP_ANGLE_MIN == 30.0
+        assert config.RADAR_SWEEP_ANGLE_MAX == 150.0
         assert config.RADAR_SWEEP_ANGLE_MIN < config.RADAR_SWEEP_ANGLE_MAX
 
     def test_fft_configuration(self):

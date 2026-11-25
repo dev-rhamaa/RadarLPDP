@@ -130,10 +130,13 @@ SERIAL_PORT: str = os.getenv("RADAR_SERIAL_PORT", os.getenv("SERVO_COM_PORT", DE
 BAUD_RATE: int = 115200
 """Serial baud rate for KYDAS4801A servo communication (115200 bps)."""
 
-# KYDAS4801A Servo parameters (Calibrated: 0 deg = +140,000 counts [KIRI], 90 deg = +10,000 counts [TENGAH], 180 deg = -120,000 counts [KANAN])
-SERVO_CENTER_POSITION: int = 10_000     # 90 degrees (home / center)
-SERVO_TARGET_0_DEG: int = 140_000       # 0 degrees (kiri)
-SERVO_TARGET_180_DEG: int = -120_000    # 180 degrees (kanan)
+# KYDAS4801A Servo parameters (Calibrated: 30 deg = +120,000 counts [KIRI], 90 deg = -10,000 counts [TENGAH], 150 deg = -140,000 counts [KANAN])
+SERVO_CENTER_POSITION: int = -10_000    # 90 degrees (home / center)
+SERVO_TARGET_30_DEG: int = 120_000      # 30 degrees (batas kiri sektor)
+SERVO_TARGET_90_DEG: int = -10_000      # 90 degrees (center)
+SERVO_TARGET_150_DEG: int = -140_000    # 150 degrees (batas kanan sektor)
+SERVO_TARGET_0_DEG: int = 185_000       # 0 degrees (kiri - ekstrapolasi)
+SERVO_TARGET_180_DEG: int = -205_000    # 180 degrees (kanan - ekstrapolasi)
 SERVO_POSITION_TOLERANCE: int = 150     # counts
 SERVO_POLL_INTERVAL: float = 0.08       # seconds (~12.5 Hz update rate)
 

@@ -1,7 +1,8 @@
+# -*- coding: utf-8 -*-
 """KYDAS4801A Servo Motor Position Controller & PPI Beam Sweep Worker.
 
 Provides both Auto Scan and Manual Target positioning with state persistence in servo_state.json.
-Calibrated mapping: 0 deg = +140,000 counts (Kiri), 90 deg = +10,000 counts (Tengah), 180 deg = -120,000 counts (Kanan).
+Calibrated mapping: 30 deg = +120,000 counts (Kiri), 90 deg = -10,000 counts (Tengah), 150 deg = -140,000 counts (Kanan).
 Initial home position is fixed at 90 deg whether motor is running or stopped.
 """
 
@@ -20,6 +21,9 @@ from config import (
     BAUD_RATE as DEFAULT_BAUD_RATE,
     PROJECT_ROOT,
     SERVO_CENTER_POSITION,
+    SERVO_TARGET_30_DEG,
+    SERVO_TARGET_90_DEG,
+    SERVO_TARGET_150_DEG,
     SERVO_TARGET_0_DEG,
     SERVO_TARGET_180_DEG,
     SERVO_POSITION_TOLERANCE,
@@ -29,21 +33,23 @@ from config import (
 )
 
 # --- Hardware Constants (KYDAS4801A) ---
-# Kalibrasi: 0 deg (Kiri) = +140,000 counts, 90 deg (Tengah) = +10,000 counts, 180 deg (Kanan) = -120,000 counts
-TARGET_0_DEG = SERVO_TARGET_0_DEG        # +140_000 counts (0 degrees - Kiri)
-TARGET_90_DEG = SERVO_CENTER_POSITION    # +10_000 counts (90 degrees home / tengah)
-TARGET_180_DEG = SERVO_TARGET_180_DEG    # -120_000 counts (180 degrees - Kanan)
-CENTER_POSITION = TARGET_90_DEG          # +10_000 counts
-MIN_POSITION = min(TARGET_0_DEG, TARGET_180_DEG)  # -120_000 counts
-MAX_POSITION = max(TARGET_0_DEG, TARGET_180_DEG)  # +140_000 counts
+# Kalibrasi: 30 deg (Kiri) = +120,000 counts, 90 deg (Tengah) = -10,000 counts, 150 deg (Kanan) = -140,000 counts
+TARGET_30_DEG = SERVO_TARGET_30_DEG      # +120_000 counts (30 degrees - batas kiri sektor)
+TARGET_90_DEG = SERVO_CENTER_POSITION    # -10_000 counts (90 degrees home / tengah)
+TARGET_150_DEG = SERVO_TARGET_150_DEG    # -140_000 counts (150 degrees - batas kanan sektor)
+TARGET_0_DEG = SERVO_TARGET_0_DEG        # +185_000 counts (0 degrees - Kiri ekstrapolasi)
+TARGET_180_DEG = SERVO_TARGET_180_DEG    # -205_000 counts (180 degrees - Kanan ekstrapolasi)
+CENTER_POSITION = TARGET_90_DEG          # -10_000 counts
+MIN_POSITION = min(TARGET_0_DEG, TARGET_180_DEG)  # -205_000 counts
+MAX_POSITION = max(TARGET_0_DEG, TARGET_180_DEG)  # +185_000 counts
 
-# Batas Sektor Radar (30° di Kiri sampai 150° di Kanan)
+# Batas Sektor Radar (30 deg di Kiri sampai 150 deg di Kanan)
 SWEEP_MIN_DEG = RADAR_SWEEP_ANGLE_MIN    # 30.0 degrees (Kiri)
 SWEEP_MAX_DEG = RADAR_SWEEP_ANGLE_MAX    # 150.0 degrees (Kanan)
-TARGET_SWEEP_MIN = int(round(TARGET_0_DEG + (SWEEP_MIN_DEG / 90.0) * (CENTER_POSITION - TARGET_0_DEG)))   # +96_667 counts (30 deg - Kiri)
-TARGET_SWEEP_MAX = int(round(CENTER_POSITION + ((SWEEP_MAX_DEG - 90.0) / 90.0) * (TARGET_180_DEG - CENTER_POSITION)))  # -76_667 counts (150 deg - Kanan)
+TARGET_SWEEP_MIN = TARGET_30_DEG         # +120_000 counts (30 deg - Kiri)
+TARGET_SWEEP_MAX = TARGET_150_DEG        # -140_000 counts (150 deg - Kanan)
 
-POSITION_TOLERANCE = SERVO_POSITION_TOLERANCE        # 150 counts (~0.104 deg)
+POSITION_TOLERANCE = SERVO_POSITION_TOLERANCE        # 150 counts (~0.07 deg)
 
 POLL_INTERVAL = SERVO_POLL_INTERVAL      # ~12.5 Hz angle refresh rate
 RESPONSE_TIMEOUT = 1.0                   # Response deadline for query
@@ -55,33 +61,27 @@ DISABLE_PACKET = bytes.fromhex("E0 00 00 00 00 00 00 00")
 
 
 def counts_to_degrees(position: int) -> float:
-    """Map encoder counts to angles in degrees (0° kiri ke 180° kanan).
+    """Map encoder counts to angles in degrees (30 deg kiri ke 150 deg kanan, 90 deg tengah).
 
-    +140,000 counts -> 0 degrees (kiri)
-     +10,000 counts -> 90 degrees (tengah)
-    -120,000 counts -> 180 degrees (kanan)
+    +120,000 counts -> 30 degrees (kiri)
+     -10,000 counts -> 90 degrees (tengah)
+    -140,000 counts -> 150 degrees (kanan)
     """
     pos = float(position)
-    # Tentukan apakah posisi berada di segmen 0..90 derajat (antara TARGET_0_DEG dan CENTER_POSITION)
-    is_in_first_half = (pos >= CENTER_POSITION) if TARGET_0_DEG >= CENTER_POSITION else (pos <= CENTER_POSITION)
-    if is_in_first_half:
-        if CENTER_POSITION == TARGET_0_DEG:
-            return 90.0
-        deg = 0.0 + (pos - TARGET_0_DEG) * 90.0 / (CENTER_POSITION - TARGET_0_DEG)
+    if pos >= CENTER_POSITION:
+        deg = 90.0 - (pos - CENTER_POSITION) * 60.0 / (TARGET_30_DEG - CENTER_POSITION)
     else:
-        if TARGET_180_DEG == CENTER_POSITION:
-            return 90.0
-        deg = 90.0 + (pos - CENTER_POSITION) * 90.0 / (TARGET_180_DEG - CENTER_POSITION)
+        deg = 90.0 + (CENTER_POSITION - pos) * 60.0 / (CENTER_POSITION - TARGET_150_DEG)
     return max(0.0, min(180.0, deg))
 
 
 def degrees_to_counts(degrees: float) -> int:
-    """Map angle in degrees back to target counts (+140k at 0° kiri, +10k at 90° tengah, -120k at 180° kanan)."""
+    """Map angle in degrees back to target counts (+120k at 30 deg kiri, -10k at 90 deg tengah, -140k at 150 deg kanan)."""
     deg = max(0.0, min(180.0, float(degrees)))
     if deg <= 90.0:
-        counts = TARGET_0_DEG + (deg / 90.0) * (CENTER_POSITION - TARGET_0_DEG)
+        counts = TARGET_30_DEG + ((deg - 30.0) / 60.0) * (CENTER_POSITION - TARGET_30_DEG)
     else:
-        counts = CENTER_POSITION + ((deg - 90.0) / 90.0) * (TARGET_180_DEG - CENTER_POSITION)
+        counts = CENTER_POSITION + ((deg - 90.0) / 60.0) * (TARGET_150_DEG - CENTER_POSITION)
     return int(round(counts))
 
 
@@ -186,7 +186,7 @@ def set_servo_running(running: bool) -> None:
     try:
         with open(STATE_FILE, "w", encoding="utf-8") as f:
             json.dump(state, f)
-        print(f"[servo] State updated: {'MULAI (RUNNING)' if running else 'STOP (STANDBY - Posisi 90°)'}")
+        print(f"[servo] State updated: {'MULAI (RUNNING)' if running else 'STOP (STANDBY - Posisi 90 deg)'}")
     except Exception as e:
         print(f"[servo] Failed to write servo state: {e}")
 
@@ -225,7 +225,7 @@ def set_servo_target_degrees(degrees: float) -> None:
     try:
         with open(STATE_FILE, "w", encoding="utf-8") as f:
             json.dump(state, f)
-        print(f"[servo] Manual target updated: {clamped_deg:.1f}° ({target_counts} counts)")
+        print(f"[servo] Manual target updated: {clamped_deg:.1f} deg ({target_counts} counts)")
     except Exception as e:
         print(f"[servo] Failed to write servo state: {e}")
 
@@ -261,7 +261,7 @@ def run_servo_angle_worker(
     reset_servo_state_on_startup()
 
     print(f"[servo] Menginisialisasi servo controller pada port {target_port} ({baudrate} baud)...")
-    print("[servo] Status awal: MOTOR STOPPED - Posisi awal 90°.")
+    print("[servo] Status awal: MOTOR STOPPED - Posisi awal 90 deg.")
 
     while not stop_event.is_set():
         try:
@@ -282,7 +282,7 @@ def run_servo_angle_worker(
                     continue
 
                 # Posisikan motor ke posisi awal 90 derajat saat terhubung
-                print(f"[servo] Mengarahkan motor ke posisi awal 90° ({CENTER_POSITION} counts)...")
+                print(f"[servo] Mengarahkan motor ke posisi awal 90 deg ({CENTER_POSITION} counts)...")
                 send_position(ser, CENTER_POSITION)
                 last_sent_target = CENTER_POSITION
                 last_command_time = time.monotonic()
@@ -311,7 +311,7 @@ def run_servo_angle_worker(
                         if was_running:
                             was_running = False
                             last_active_mode = None
-                            print("[servo] Motor STOP -> Kembali ke posisi awal 90°.")
+                            print("[servo] Motor STOP -> Kembali ke posisi awal 90 deg.")
 
                         # Monitoring sudut riil motor untuk pembaruan garis sweep PPI
                         pos = read_position(ser, timeout=0.08, stop_event=stop_event)
@@ -326,7 +326,7 @@ def run_servo_angle_worker(
                     # KONDISI MOTOR NYALA (RUNNING)
                     if not was_running:
                         was_running = True
-                        print(f"[servo] Motor NYALA (MULAI) dari posisi awal 90° - Mode: {active_mode}")
+                        print(f"[servo] Motor NYALA (MULAI) dari posisi awal 90 deg - Mode: {active_mode}")
                         last_sent_target = None
                         if active_mode == "scan":
                             scan_target = TARGET_SWEEP_MAX if counts_to_degrees(current_position) <= 90.0 else TARGET_SWEEP_MIN
