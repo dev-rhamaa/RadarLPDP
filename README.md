@@ -111,3 +111,50 @@ Karena widget FFT dan Sinewave dirancang untuk memantau file yang berubah, Anda 
     -   Tampilan PPI bergerak dengan lancar.
     -   Plot FFT dan Waveform secara otomatis diperbarui setiap kali skrip simulator menulis ke file.
     -   Tekan tombol `Esc` untuk keluar.
+
+## Catatan Kalibrasi Motor Servo (Datasheet)
+
+Acuan utama: datasheet driver `KYDAS4X01A DC servo motor driver.pdf`, motor `KY80ACS0407-30` dan gearbox `AB.pdf` (090-L2, rasio **80:1**).
+
+| Besaran | Nilai | Sumber |
+|---|---|---|
+| Encoder motor | 2500 ppr (incremental magnetic) | datasheet motor |
+| Skala posisi driver | 10.000 counts / putaran motor (2500 x 4 quadrature) | datasheet driver (`10000/circle`) |
+| Rasio gearbox | 80:1 | gearbox terpasang |
+| Backlash gearbox | P1 <= 4 arcmin, P2 <= 6 arcmin (0,067 - 0,1 deg) | datasheet gearbox |
+
+Perhitungan:
+
+```
+counts per putaran antena = 10.000 x 80      = 800.000
+counts per 1 derajat      = 800.000 / 360    = 2.222,22
+1 count                   = 0,00045 deg
+```
+
+-   **1 derajat antena = 2.222,22 counts**
+-   **1 putaran 360 deg = 800.000 counts**
+-   Arah: counts **positif = kiri**, counts **negatif = kanan** (counts makin negatif, sudut makin besar).
+
+### Beda dengan kalibrasi lama di `config.py`
+
+Kalibrasi lama (hasil percobaan) memakai 130.000 counts per 60 deg = 2.166,67 counts/deg, setara rasio efektif sekitar 78:1, selisih 2,5% dari datasheet. Akibatnya, perintah 60 deg dari tengah (130.000 counts) secara teori hanya menggerakkan antena sekitar 58,5 deg. Dengan angka datasheet, +-60 deg = +-133.333 counts.
+
+Titik tengah `SERVO_CENTER_POSITION = -10_000` bukan dari datasheet, melainkan offset hasil percobaan. Ukur ulang setiap kali antena atau coupling dipasang ulang.
+
+`config.py` dan `app/servo_controller.py` **belum diubah**. Nilai di atas baru acuan; verifikasi dengan pengukuran langsung (baca `ED 08` sebelum dan sesudah memutar antena sejauh sudut yang diketahui) sebelum dipakai menggantikan kalibrasi lama.
+
+## Tool Centering Motor (`centering_tool.py`)
+
+Mini app untuk menggeser motor ke kiri/kanan sampai antena tepat di tengah (90 deg).
+
+```bash
+python centering_tool.py
+```
+
+-   Tutup `main.py` dulu: port serial (default `COM13`, lihat `config.py`) tidak bisa dipakai dua program sekaligus.
+-   Isi port, klik **Hubungkan**. Posisi saat itu dijadikan acuan jendela gerak.
+-   **<< KIRI** / **KANAN >>** menggeser motor sebesar langkah terpilih (0,1 / 0,5 / 1 / 5 deg per klik, dikonversi dengan 2.222,22 counts/deg).
+-   **Batas gerak: 1 putaran = 800.000 counts** (+-400.000 dari titik tengah). Klik di luar batas ditolak dan ditampilkan pesan.
+-   **Tandai TENGAH (90 deg)** menyimpan posisi riil sekarang sebagai titik tengah, memindahkan jendela 800.000 counts ke situ, dan mencetak nilainya di terminal. Salin angka itu ke `SERVO_CENTER_POSITION` di `config.py`.
+-   **DISABLE motor** melepas motor (perintah `E0 00 ...`). Klik KIRI/KANAN untuk mengaktifkan lagi.
+-   Tool ini tidak mengubah `config.py` atau `servo_state.json` secara otomatis.
