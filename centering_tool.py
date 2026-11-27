@@ -7,12 +7,12 @@ radar otomatis memakai posisi motor saat itu sebagai titik tengah (tidak ada nil
 yang perlu disalin ke ``config.py``). "Tandai TENGAH" hanya memindahkan jendela batas
 1 putaran di tool ini ke posisi sekarang.
 
-Batas gerak: total 1 putaran antena = 800.000 counts (+-400.000 dari titik tengah).
+Batas gerak: total 1 putaran antena = 10.485.760 counts (+-5.242.880 dari titik tengah).
 
-Skala counts (dari datasheet):
-    encoder 2500 ppr x 4 (quadrature) = 10.000 counts / putaran motor
-    gearbox 80:1                      -> 800.000 counts / putaran antena
-    1 derajat antena                  = 2.222,22 counts
+Skala counts (dari datasheet ENCODER.pdf + gearbox 80:1):
+    encoder absolut 17-bit            = 131.072 counts / putaran motor
+    gearbox 80:1                      -> 10.485.760 counts / putaran antena
+    1 derajat antena                  = 29.127,11 counts
 
 Arah: counts POSITIF = KIRI, counts NEGATIF = KANAN (sama dengan kalibrasi di config.py).
 
@@ -33,16 +33,15 @@ import serial
 from app.servo_controller import disable_servo, read_position, send_position
 from config import BAUD_RATE, SERIAL_PORT
 
-# --- Skala dari datasheet ---
-ENCODER_PPR = 2500
-QUADRATURE = 4
+# --- Skala dari datasheet (ENCODER.pdf: 17-bit single-turn + gearbox 80:1) ---
+ENCODER_BITS = 17
 GEAR_RATIO = 80
-COUNTS_PER_MOTOR_REV = ENCODER_PPR * QUADRATURE                 # 10.000
-COUNTS_PER_ANTENNA_REV = COUNTS_PER_MOTOR_REV * GEAR_RATIO      # 800.000
-COUNTS_PER_DEG = COUNTS_PER_ANTENNA_REV / 360.0                 # 2.222,22
+COUNTS_PER_MOTOR_REV = 1 << ENCODER_BITS                        # 131.072
+COUNTS_PER_ANTENNA_REV = COUNTS_PER_MOTOR_REV * GEAR_RATIO      # 10.485.760
+COUNTS_PER_DEG = COUNTS_PER_ANTENNA_REV / 360.0                 # ~29.127,11
 
 MAX_TRAVEL_COUNTS = COUNTS_PER_ANTENNA_REV                      # batas total 1 putaran
-HALF_TRAVEL_COUNTS = MAX_TRAVEL_COUNTS // 2                     # +-400.000 dari titik tengah
+HALF_TRAVEL_COUNTS = MAX_TRAVEL_COUNTS // 2                     # +-5.242.880 dari titik tengah
 
 STEP_OPTIONS_DEG = ["0.1", "0.5", "1", "5"]
 DEFAULT_STEP_DEG = "1"
@@ -61,7 +60,7 @@ def counts_to_deg(counts: float) -> float:
 
 
 def clamp_target(target: int, anchor: int) -> int:
-    """Batasi target ke jendela 1 putaran (anchor +- 400.000 counts)."""
+    """Batasi target ke jendela 1 putaran (anchor +- 5.242.880 counts)."""
     return max(anchor - HALF_TRAVEL_COUNTS, min(anchor + HALF_TRAVEL_COUNTS, int(target)))
 
 
@@ -132,7 +131,7 @@ def _worker_loop(port: str, stop_event: threading.Event) -> None:
                         wanted = snap["target"] + cmd[1]
                         limited = clamp_target(wanted, snap["anchor"])
                         if limited != wanted:
-                            _set(msg="Batas 1 putaran (800.000 counts) tercapai.")
+                            _set(msg="Batas 1 putaran (10.485.760 counts) tercapai.")
                         else:
                             _set(msg="")
                         if send_position(ser, limited):
@@ -229,7 +228,7 @@ def build_ui() -> None:
         dpg.add_text("-", tag="pos_text")
         dpg.add_text("Relatif ke TENGAH:")
         dpg.add_text("-", tag="rel_text")
-        dpg.add_text("Rentang gerak (1 putaran = 800.000 counts):")
+        dpg.add_text("Rentang gerak (1 putaran = 10.485.760 counts):")
         dpg.add_progress_bar(tag="travel_bar", default_value=0.5, width=-1, overlay="-")
         dpg.add_separator()
 

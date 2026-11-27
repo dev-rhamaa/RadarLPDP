@@ -13,7 +13,7 @@ import app.servo_controller as sc
 class FakeDriver:
     """Minimal KYDAS4801A stand-in: answers ED 08 queries and chases the last E0 01 target."""
 
-    def __init__(self, start_position: int, step: int = 40_000):
+    def __init__(self, start_position: int, step: int = 500_000):
         self.position = start_position
         self.target = start_position
         self.step = step
@@ -73,10 +73,11 @@ def test_mapping_roundtrip_and_direction():
     assert sc.degrees_to_counts(30.0, center) > center > sc.degrees_to_counts(150.0, center)
 
 
-def test_mapping_matches_previous_calibration():
-    """Dengan titik tengah lama (-10.000) hasilnya sama dengan kalibrasi hard-coded sebelumnya."""
-    assert sc.degrees_to_counts(30.0, -10_000) == 120_000
-    assert sc.degrees_to_counts(150.0, -10_000) == -140_000
+def test_mapping_matches_17bit_gearbox_scale():
+    """Dengan titik tengah 0, +-60 deg sesuai resolusi 17-bit (131.072) * gearbox 80:1."""
+    expected_60_deg = round((131_072 * 80) / 6.0)  # 1.747.627 counts
+    assert sc.degrees_to_counts(30.0, 0) == expected_60_deg
+    assert sc.degrees_to_counts(150.0, 0) == -expected_60_deg
 
 
 # ------------------------------------------------------------------ worker

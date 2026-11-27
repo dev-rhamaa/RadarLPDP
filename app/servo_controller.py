@@ -35,14 +35,14 @@ from config import (
 )
 
 # --- Hardware Constants (KYDAS4801A) ---
-COUNTS_PER_DEG = SERVO_COUNTS_PER_DEG    # ~2166.67 counts per derajat antena
+COUNTS_PER_DEG = SERVO_COUNTS_PER_DEG    # ~29127.11 counts per derajat antena
 HOME_DEG = 90.0                          # titik tengah / home
 
 # Batas Sektor Radar (30 deg di Kiri sampai 150 deg di Kanan)
 SWEEP_MIN_DEG = RADAR_SWEEP_ANGLE_MIN    # 30.0 degrees (Kiri)
 SWEEP_MAX_DEG = RADAR_SWEEP_ANGLE_MAX    # 150.0 degrees (Kanan)
 
-POSITION_TOLERANCE = SERVO_POSITION_TOLERANCE        # 150 counts (~0.07 deg)
+POSITION_TOLERANCE = SERVO_POSITION_TOLERANCE        # 2000 counts (~0.07 deg)
 
 POLL_INTERVAL = SERVO_POLL_INTERVAL      # ~12.5 Hz angle refresh rate
 RESPONSE_TIMEOUT = 1.0                   # Response deadline for query
